@@ -1,0 +1,16 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Local Session & Cookies
+.linkedin-session
+*.log
+
+# Build Outputs
+dist
+build
+
+# Environment & Temp
+.env
+.env.local
+.DS_Store
