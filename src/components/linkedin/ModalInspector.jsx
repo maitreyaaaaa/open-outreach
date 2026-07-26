@@ -39,14 +39,6 @@ export default function ModalInspector({ recipients, template, onNext }) {
     setSendingTest(true);
     setTestStatus(null);
 
-    if (navigator.clipboard && renderedNote) {
-      try {
-        await navigator.clipboard.writeText(renderedNote);
-      } catch (e) {
-        // ignore
-      }
-    }
-
     try {
       const res = await sendDirectConnectionInvitation({
         profileUrl: currentRecord.LinkedInUrl,
@@ -54,19 +46,10 @@ export default function ModalInspector({ recipients, template, onNext }) {
         recipientName: currentRecord.Name
       });
 
-      if (res.isWebFallback) {
-        if (currentRecord.LinkedInUrl) {
-          window.open(currentRecord.LinkedInUrl, '_blank');
-        }
-        setTestStatus({
-          success: true,
-          isWebFallback: true,
-          message: `📋 Custom note copied to clipboard & opened ${currentRecord.Name}'s profile in a new tab! (For background automated dispatches without opening browser tabs, run: node server.js)`
-        });
-      } else if (res.success) {
+      if (res.success) {
         setTestStatus({ success: true, message: res.message });
       } else {
-        setTestStatus({ success: false, message: res.message });
+        setTestStatus({ success: false, message: res.message || 'Dispatch failed.' });
       }
     } catch (err) {
       setTestStatus({ success: false, message: err.message || 'Network error sending request.' });

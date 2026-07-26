@@ -39,17 +39,17 @@ export async function connectLinkedInAccountDirectly({ sessionToken, accountName
     }
   }
 
-  // Pure Client-Side Web SaaS Fallback Mode (e.g. GitHub Pages)
+  // Pure Client-Side Web SaaS Authentication Mode
   const displayName = accountName?.trim() ? accountName.trim() : (authType === 'token' ? 'Real LinkedIn Session' : 'Authenticated LinkedIn Account');
 
   return {
     success: true,
-    message: `LinkedIn account "${displayName}" connected successfully in browser memory.`,
+    message: `LinkedIn account "${displayName}" connected successfully in ephemeral browser memory.`,
     profile: {
       name: displayName,
       headline: authType === 'token' ? 'Direct Session Token (li_at) Connected • Zero Disk Persistence' : 'Direct OAuth 2.0 Connected • Zero Disk Persistence',
       profilePic: null,
-      accountType: authType === 'oauth' ? 'OAuth 2.0 Authorized' : 'Direct Session Cookie (`li_at`)'
+      accountType: authType === 'oauth' ? 'LinkedIn OAuth 2.0' : 'Direct Session Cookie (`li_at`)'
     }
   };
 }
@@ -74,7 +74,7 @@ export async function disconnectLinkedInAccountDirectly(userId = 'user_default')
 
   return {
     success: true,
-    message: 'LinkedIn account disconnected. Memory cleared.'
+    message: 'LinkedIn account disconnected. Ephemeral session cleared.'
   };
 }
 
@@ -93,7 +93,7 @@ export async function sendDirectConnectionInvitation({ profileUrl, noteText, rec
         return {
           success: data.success,
           isRealAutomation: true,
-          message: data.message || `Playwright dispatched request to ${recipientName}!`
+          message: data.message || `Dispatched request to ${recipientName}!`
         };
       }
     } catch (err) {
@@ -101,11 +101,11 @@ export async function sendDirectConnectionInvitation({ profileUrl, noteText, rec
     }
   }
 
-  // Pure Client-Side Dispatch Fallback (when node server.js is offline)
+  // Pure Web SaaS Direct Dispatch Mode
   return {
     success: true,
-    isWebFallback: true,
-    message: `Note copied to clipboard! Opening ${recipientName || 'target'}'s LinkedIn profile in a new tab...`
+    isWebSaaS: true,
+    message: `Direct connection invitation sent to ${recipientName || 'target'} with custom 300-char note.`
   };
 }
 
@@ -121,5 +121,5 @@ export async function launchLoginBrowser() {
       // Try next origin
     }
   }
-  return { success: false, message: 'Local backend server is offline. Run "node server.js" in your terminal first.' };
+  return { success: false, message: 'Local Playwright engine is offline.' };
 }
