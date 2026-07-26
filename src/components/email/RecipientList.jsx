@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, Building2, ShieldCheck, Check } from 'lucide-react';
-import { parseCSVFile, parseExcelFile, generateDemo198Companies } from '../../utils/csvParser';
+import { parseCSVFile, parseExcelFile, generateDemoCompanies } from '../../utils/csvParser';
 
 export default function RecipientList({ recipients, setRecipients, onNext }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,8 +31,8 @@ export default function RecipientList({ recipients, setRecipients, onNext }) {
   };
 
   const handleLoadDemo = () => {
-    const demo198 = generateDemo198Companies();
-    setRecipients(demo198);
+    const demoCompanies = generateDemoCompanies();
+    setRecipients(demoCompanies);
   };
 
   const handleAddRecipient = (e) => {
@@ -91,7 +91,7 @@ export default function RecipientList({ recipients, setRecipients, onNext }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge-enterprise badge-enterprise-white">198 Companies Directory</span>
+              <span className="badge-enterprise badge-enterprise-white">Enterprise Directory</span>
               <span className="badge-enterprise">{recipients.length} Loaded</span>
             </div>
             <h2 style={{ fontSize: '1.35rem', fontWeight: '700', marginTop: '6px', color: '#ffffff' }}>
@@ -104,7 +104,7 @@ export default function RecipientList({ recipients, setRecipients, onNext }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <button onClick={handleLoadDemo} className="btn-enterprise btn-enterprise-primary">
-              <Sparkles size={15} /> Load 198 Demo Companies
+              <Sparkles size={15} /> Load Demo Companies
             </button>
 
             <label className="btn-enterprise btn-enterprise-secondary" style={{ cursor: 'pointer' }}>
@@ -217,7 +217,7 @@ export default function RecipientList({ recipients, setRecipients, onNext }) {
               {filteredRecipients.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: '50px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No companies match your search query. Click <strong>"Load 198 Demo Companies"</strong> or upload a file.
+                    No companies match your search query. Click <strong>"Load Demo Companies"</strong> or upload a file.
                   </td>
                 </tr>
               ) : (

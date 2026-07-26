@@ -6,7 +6,7 @@ import TemplateEditor from './email/TemplateEditor';
 import EmailPreviewer from './email/EmailPreviewer';
 import SmtpSettings from './email/SmtpSettings';
 import CampaignMonitor from './email/CampaignMonitor';
-import { generateDemo198Companies, parseCSVFile } from '../utils/csvParser';
+import { generateDemoCompanies, parseCSVFile } from '../utils/csvParser';
 import { animateCardStagger } from '../utils/animationEngine';
 
 export default function EmailModule({
@@ -61,9 +61,9 @@ export default function EmailModule({
       {recipients.length === 0 && subTab === 'recipients' ? (
         <EmptyState
           title="No Email Recipients Loaded"
-          description="Your email target directory is currently empty. Load demo data or import a CSV/Excel file to prepare your 198 email campaign."
+          description="Your email target directory is currently empty. Load demo data or import a CSV/Excel file to prepare your enterprise email campaign."
           channel="Email"
-          onLoadDemo={() => setRecipients(generateDemo198Companies())}
+          onLoadDemo={() => setRecipients(generateDemoCompanies())}
           onImport={handleFileUpload}
         />
       ) : (

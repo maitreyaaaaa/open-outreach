@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import OverviewHub from './components/OverviewHub';
 import EmailModule from './components/EmailModule';
 import LinkedInModule from './components/LinkedInModule';
-import { generateDemo198Companies, generateDemoLinkedInProfiles } from './utils/csvParser';
+import { generateDemoCompanies, generateDemoLinkedInProfiles } from './utils/csvParser';
 
 export default function App() {
   const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin

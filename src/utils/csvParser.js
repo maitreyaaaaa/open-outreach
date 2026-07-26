@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
-export function generateDemo198Companies() {
+export function generateDemoCompanies() {
   const companies = [
     { name: 'Y Combinator', email: 'press@ycombinator.com', contact: 'Garry Tan' },
     { name: 'Techstars', email: 'hello@techstars.com', contact: 'Maëlle Gavet' },
@@ -30,48 +30,16 @@ export function generateDemo198Companies() {
     { name: 'GV (Google Ventures)', email: 'press@gv.com', contact: 'Frédérique Dame' }
   ];
 
-  const suffixes = ['Inc', 'Labs', 'Technologies', 'Systems', 'Global', 'AI', 'Cloud', 'Data'];
-  const firstNames = ['Alexander', 'Sarah', 'Michael', 'Emily', 'David', 'Jessica', 'James', 'Rachel', 'Daniel', 'Sophia', 'Chris', 'Amanda'];
-  const lastNames = ['Chen', 'Smith', 'Johnson', 'Miller', 'Davis', 'Wilson', 'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris'];
-  const domains = ['tech.io', 'labs.ai', 'cloud.com', 'solutions.co', 'venture.net'];
-
-  const generated = [];
-
-  for (let i = 1; i <= 198; i++) {
-    if (i <= companies.length) {
-      const c = companies[i - 1];
-      generated.push({
-        id: i,
-        Company: c.name,
-        Email: c.email,
-        ContactPerson: c.contact,
-        CustomNote: `We saw ${c.name}'s recent announcement and wanted to reach out.`,
-        Status: 'Pending',
-        SentAt: null,
-        Error: null
-      });
-    } else {
-      const fn = firstNames[(i - 1) % firstNames.length];
-      const ln = lastNames[(i - 1) % lastNames.length];
-      const suffix = suffixes[(i - 1) % suffixes.length];
-      const domain = domains[(i - 1) % domains.length];
-      const companyName = `${ln} ${suffix}`;
-      const email = `${fn.toLowerCase()}.${ln.toLowerCase()}@${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.${domain}`;
-
-      generated.push({
-        id: i,
-        Company: companyName,
-        Email: email,
-        ContactPerson: `${fn} ${ln}`,
-        CustomNote: `Direct partnership pitch tailored for ${companyName}.`,
-        Status: 'Pending',
-        SentAt: null,
-        Error: null
-      });
-    }
-  }
-
-  return generated;
+  return companies.map((c, i) => ({
+    id: i + 1,
+    Company: c.name,
+    Email: c.email,
+    ContactPerson: c.contact,
+    CustomNote: `We saw ${c.name}'s recent announcement and wanted to reach out.`,
+    Status: 'Pending',
+    SentAt: null,
+    Error: null
+  }));
 }
 
 export function generateDemoLinkedInProfiles() {
@@ -82,7 +50,7 @@ export function generateDemoLinkedInProfiles() {
 
   const demoData = [];
 
-  for (let i = 1; i <= 50; i++) {
+  for (let i = 1; i <= 25; i++) {
     const fn = firstNames[(i - 1) % firstNames.length];
     const ln = lastNames[(i - 1) % lastNames.length];
     const company = companies[(i - 1) % companies.length];
