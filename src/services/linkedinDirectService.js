@@ -1,17 +1,42 @@
-export async function connectLinkedInAccountDirectly({ sessionToken, accountName, authType = 'oauth', userId = 'user_default' }) {
-  try {
-    const response = await fetch('/api/linkedin/connect-direct', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionToken, accountName, authType, userId })
-    });
+const SERVER_ORIGINS = ['', 'http://localhost:3010', 'http://localhost:3000', 'http://localhost:3001'];
 
-    const contentType = response.headers.get('content-type');
-    if (response.ok && contentType && contentType.includes('application/json')) {
-      return await response.json();
+/**
+ * Probes local automation server health
+ */
+export async function checkLocalAutomationServerHealth() {
+  for (const origin of SERVER_ORIGINS) {
+    try {
+      const response = await fetch(`${origin}/api/health`, { method: 'GET' });
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.status === 'ok') {
+          return { online: true, origin, engine: data.engine };
+        }
+      }
+    } catch (err) {
+      // Continue probing
     }
-  } catch (err) {
-    // Network or server offline
+  }
+  return { online: false, origin: null };
+}
+
+export async function connectLinkedInAccountDirectly({ sessionToken, accountName, authType = 'oauth', userId = 'user_default' }) {
+  for (const origin of SERVER_ORIGINS) {
+    try {
+      const response = await fetch(`${origin}/api/linkedin/connect-direct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionToken, accountName, authType, userId })
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+    } catch (err) {
+      // Fallthrough
+    }
   }
 
   // Pure Client-Side Web SaaS Fallback Mode (e.g. GitHub Pages)
@@ -30,19 +55,21 @@ export async function connectLinkedInAccountDirectly({ sessionToken, accountName
 }
 
 export async function disconnectLinkedInAccountDirectly(userId = 'user_default') {
-  try {
-    const response = await fetch('/api/linkedin/disconnect-direct', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
-    });
+  for (const origin of SERVER_ORIGINS) {
+    try {
+      const response = await fetch(`${origin}/api/linkedin/disconnect-direct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
 
-    const contentType = response.headers.get('content-type');
-    if (response.ok && contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+    } catch (err) {
+      // Fallthrough
     }
-  } catch (err) {
-    // Fallthrough
   }
 
   return {
@@ -52,25 +79,47 @@ export async function disconnectLinkedInAccountDirectly(userId = 'user_default')
 }
 
 export async function sendDirectConnectionInvitation({ profileUrl, noteText, recipientName, userId = 'user_default' }) {
-  try {
-    const response = await fetch('/api/linkedin/send-direct-connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileUrl, noteText, recipientName, userId })
-    });
+  for (const origin of SERVER_ORIGINS) {
+    try {
+      const response = await fetch(`${origin}/api/send-connect-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileUrl, noteText, recipientName, userId })
+      });
 
-    const contentType = response.headers.get('content-type');
-    if (response.ok && contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return {
+          success: data.success,
+          isRealAutomation: true,
+          message: data.message || `Playwright dispatched request to ${recipientName}!`
+        };
+      }
+    } catch (err) {
+      // Try next origin
     }
-  } catch (err) {
-    // Fallthrough
   }
 
-  // Pure Client-Side Dispatch Fallback (GitHub Pages static hosting)
+  // Pure Client-Side Dispatch Fallback (when node server.js is offline)
   return {
     success: true,
     isWebFallback: true,
     message: `Note copied to clipboard! Opening ${recipientName || 'target'}'s LinkedIn profile in a new tab...`
   };
+}
+
+export async function launchLoginBrowser() {
+  for (const origin of SERVER_ORIGINS) {
+    try {
+      const response = await fetch(`${origin}/api/launch-login-browser`, { method: 'POST' });
+      const contentType = response.headers.get('content-type');
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+    } catch (err) {
+      // Try next origin
+    }
+  }
+  return { success: false, message: 'Local backend server is offline. Run "node server.js" in your terminal first.' };
 }

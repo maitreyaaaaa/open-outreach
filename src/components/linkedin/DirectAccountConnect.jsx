@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info, ExternalLink } from 'lucide-react';
-import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly } from '../../services/linkedinDirectService';
+import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info, ExternalLink, Terminal } from 'lucide-react';
+import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly, checkLocalAutomationServerHealth, launchLoginBrowser } from '../../services/linkedinDirectService';
 import Button from '../ui/Button';
 
 export default function DirectAccountConnect({ connectedProfile, setConnectedProfile }) {
-  const [connectMethod, setConnectMethod] = useState('oauth'); // default to oauth
+  const [connectMethod, setConnectMethod] = useState('oauth');
   const [sessionToken, setSessionToken] = useState('');
   const [accountName, setAccountName] = useState('');
   const [oauthClientId, setOauthClientId] = useState('');
@@ -13,15 +13,26 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
   const [connecting, setConnecting] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
 
+  // Server health state
+  const [serverHealth, setServerHealth] = useState({ online: false, origin: null });
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      const res = await checkLocalAutomationServerHealth();
+      setServerHealth(res);
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Check URL parameters for LinkedIn OAuth 2.0 authorization code callback (?code=...)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const oauthCode = urlParams.get('code');
-    const oauthState = urlParams.get('state');
 
     if (oauthCode) {
       setConnecting(true);
-      // Clean query parameters from URL for clean navigation
       window.history.replaceState({}, document.title, window.location.pathname);
 
       connectLinkedInAccountDirectly({
@@ -45,16 +56,14 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
     setStatusMsg(null);
 
     const redirectUri = window.location.origin + window.location.pathname;
-    const clientId = oauthClientId.trim() || '78xxxxxx78'; // Default or custom OAuth Client ID
+    const clientId = oauthClientId.trim() || '78xxxxxx78';
 
-    // If client ID is custom, redirect to LinkedIn's official OAuth authorization endpoint
     if (oauthClientId.trim()) {
       const oauthUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=open_outreach_auth&scope=openid%20profile%20w_member_social%20email`;
       window.location.href = oauthUrl;
       return;
     }
 
-    // Direct 1-Click OAuth flow authorization
     try {
       const data = await connectLinkedInAccountDirectly({
         sessionToken: null,
@@ -88,7 +97,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
       });
       if (data.success) {
         setConnectedProfile(data.profile);
-        setSessionToken(''); // Immediately clear input state for security
+        setSessionToken('');
         setStatusMsg({ success: true, message: data.message });
       } else {
         setStatusMsg({ success: false, message: data.message });
@@ -108,32 +117,63 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
     setStatusMsg({ success: true, message: 'LinkedIn account disconnected. Ephemeral memory wiped.' });
   };
 
+  const handleLaunchChrome = async () => {
+    setStatusMsg({ success: true, message: 'Launching Playwright Chrome session...' });
+    const res = await launchLoginBrowser();
+    setStatusMsg({ success: res.success, message: res.message });
+  };
+
   return (
     <div className="glass-enterprise-panel" style={{ padding: '28px', marginBottom: '28px' }}>
       
+      {/* Header Bar with Live Server Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ background: '#0a66c2', width: '38px', height: '38px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Linkedin color="#ffffff" size={22} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff' }}>
                 Direct LinkedIn Account Integration
               </h2>
               <span className="badge-enterprise badge-enterprise-white">Zero Persistence Security</span>
+              
+              {/* Live Playwright Automation Engine Status Badge */}
+              <span 
+                className="badge-enterprise"
+                style={{
+                  background: serverHealth.online ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                  borderColor: serverHealth.online ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)',
+                  color: serverHealth.online ? '#4ade80' : '#facc15',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: serverHealth.online ? '#22c55e' : '#eab308' }}></span>
+                {serverHealth.online ? `Playwright Server Engine Online (${serverHealth.origin})` : 'Web SaaS Mode (Run node server.js for 100% Background Automation)'}
+              </span>
             </div>
-            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '4px' }}>
               Connect your LinkedIn account via 1-Click OAuth 2.0 or Session Cookie. Credentials live exclusively in ephemeral RAM.
             </p>
           </div>
         </div>
 
-        {connectedProfile && (
-          <Button variant="danger" onClick={handleDisconnect} icon={LogOut}>
-            Disconnect & Clear Session
-          </Button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {serverHealth.online && (
+            <Button variant="secondary" onClick={handleLaunchChrome} icon={Terminal}>
+              Launch Chrome Session
+            </Button>
+          )}
+
+          {connectedProfile && (
+            <Button variant="danger" onClick={handleDisconnect} icon={LogOut}>
+              Disconnect & Clear Session
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Connected Account Card View */}
@@ -176,7 +216,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
           </div>
         </div>
       ) : (
-        /* Unconnected State: Choose Method */
+        /* Unconnected State */
         <div>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
             <button
@@ -202,132 +242,78 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
           </div>
 
           {connectMethod === 'oauth' ? (
-            <div className="glass-enterprise-card" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Zap size={18} color="#0a66c2" /> 1-Click LinkedIn OAuth 2.0 Authentication
-                </h3>
+            <form onSubmit={handleConnectOAuth} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  Account Label (Optional)
+                </label>
+                <input
+                  type="text"
+                  className="input-enterprise"
+                  placeholder="e.g. My Personal LinkedIn Account"
+                  value={accountName}
+                  onChange={e => setAccountName(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button variant="primary" type="submit" loading={connecting} icon={Zap}>
+                  Connect via LinkedIn OAuth 2.0
+                </Button>
                 <button
                   type="button"
                   onClick={() => setShowOAuthGuide(!showOAuthGuide)}
-                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  <HelpCircle size={14} /> How OAuth 2.0 works
+                  <HelpCircle size={14} /> How OAuth works
                 </button>
               </div>
-
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                Authorize directly with official LinkedIn OAuth 2.0. No plain passwords are ever shared or saved to disk.
-              </p>
-
-              {/* OAuth Info Guide */}
-              {showOAuthGuide && (
-                <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '8px', padding: '14px', marginBottom: '18px', fontSize: '0.8rem', color: '#e0f2fe' }}>
-                  <div style={{ fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Info size={14} color="#38bdf8" /> Official LinkedIn OAuth 2.0 Security:
-                  </div>
-                  <ul style={{ marginLeft: '18px', lineHeight: '1.6' }}>
-                    <td>OAuth 2.0 opens LinkedIn's secure sign-in page directly.</td>
-                    <td>You authorize OpenOutreach to access member profile data without revealing your master password.</td>
-                    <td>To use your custom Developer App, paste your <b>Client ID</b> below before clicking connect.</td>
-                  </ul>
-                </div>
-              )}
-
-              <form onSubmit={handleConnectOAuth} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'end' }}>
-                <div style={{ flex: 1, minWidth: '260px' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    LinkedIn App Client ID (Optional for custom Developer Apps)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-enterprise"
-                    placeholder="Enter custom Client ID (e.g. 78xxxxxx)"
-                    value={oauthClientId}
-                    onChange={e => setOauthClientId(e.target.value)}
-                  />
-                </div>
-
-                <Button type="submit" variant="primary" disabled={connecting} icon={Linkedin} style={{ height: '42px' }}>
-                  {connecting ? 'Authorizing with LinkedIn...' : 'Connect LinkedIn Account Now'}
-                </Button>
-              </form>
-            </div>
+            </form>
           ) : (
-            <form onSubmit={handleConnectSessionToken} className="glass-enterprise-card" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Lock size={14} color="var(--text-muted)" /> Connect via LinkedIn `li_at` Session Cookie
+            <form onSubmit={handleConnectSessionToken} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  LinkedIn Session Token (`li_at` cookie value)
                 </label>
+                <input
+                  type="password"
+                  className="input-enterprise"
+                  placeholder="Paste your li_at session cookie here..."
+                  value={sessionToken}
+                  onChange={e => setSessionToken(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button variant="primary" type="submit" loading={connecting} icon={Key}>
+                  Save Ephemeral Token
+                </Button>
                 <button
                   type="button"
                   onClick={() => setShowCookieGuide(!showCookieGuide)}
-                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  <HelpCircle size={14} /> How do I get my `li_at` cookie?
+                  <HelpCircle size={14} /> How to find your `li_at` cookie
                 </button>
-              </div>
-
-              {/* Step-by-Step Cookie Guide */}
-              {showCookieGuide && (
-                <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '0.8rem', color: '#e0f2fe' }}>
-                  <div style={{ fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Info size={14} color="#38bdf8" /> 3 Steps to find your `li_at` cookie:
-                  </div>
-                  <ol style={{ marginLeft: '18px', lineHeight: '1.6' }}>
-                    <td>Log into your real account on <b>linkedin.com</b> in your browser.</td>
-                    <td>Press <b>F12</b> (Inspect) → Go to <b>Application</b> tab (or <b>Storage</b> in Firefox) → Expand <b>Cookies</b> → <b>https://www.linkedin.com</b>.</td>
-                    <td>Find the row named <b><code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px' }}>li_at</code></b> and copy its long Value string.</td>
-                  </ol>
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '12px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    Account Label / Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-enterprise"
-                    placeholder="e.g. My Primary LinkedIn Account"
-                    value={accountName}
-                    onChange={e => setAccountName(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    `li_at` Session Cookie String
-                  </label>
-                  <input
-                    type="password"
-                    className="input-enterprise"
-                    placeholder="Paste li_at cookie string here..."
-                    value={sessionToken}
-                    onChange={e => setSessionToken(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" variant="primary" disabled={connecting} style={{ height: '42px' }}>
-                  {connecting ? 'Connecting...' : 'Connect Real Account'}
-                </Button>
               </div>
             </form>
           )}
+        </div>
+      )}
 
-          {statusMsg && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px 16px',
-              borderRadius: '6px',
-              fontSize: '0.85rem',
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#ffffff'
-            }}>
-              {statusMsg.message}
-            </div>
-          )}
+      {statusMsg && (
+        <div
+          style={{
+            marginTop: '16px',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            fontSize: '0.85rem',
+            background: statusMsg.success ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+            border: statusMsg.success ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+            color: statusMsg.success ? '#4ade80' : '#f87171'
+          }}
+        >
+          {statusMsg.message}
         </div>
       )}
 
