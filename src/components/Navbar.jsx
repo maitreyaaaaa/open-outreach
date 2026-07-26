@@ -1,15 +1,7 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, Mail, Linkedin, User, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import SaaSAuthModal from './saas/SaaSAuthModal';
+import React from 'react';
+import { LayoutDashboard, Mail, Linkedin, ShieldCheck } from 'lucide-react';
 
 export default function Navbar({ activeModule, setActiveModule, emailCount, linkedinCount, isSmtpConnected, smtpUser }) {
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [currentUser, setCurrentUser] = useState({
-    name: 'Sarah Chen',
-    email: 'sarah@apextech.io',
-    plan: 'Enterprise Pro'
-  });
-
   const modules = [
     { id: 'overview', label: 'Overview Hub', icon: LayoutDashboard },
     { id: 'email', label: 'Email Outreach', icon: Mail, badge: emailCount },
@@ -78,26 +70,14 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
           })}
         </nav>
 
-        {/* Account & SaaS Workspace */}
+        {/* Zero-Persistence Security Badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            onClick={() => setShowAuthModal(true)}
-            className="btn-enterprise btn-enterprise-secondary"
-            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-          >
-            <User size={14} /> {currentUser ? currentUser.name : 'Sign In'}
-          </button>
+          <span className="badge-enterprise badge-enterprise-white" style={{ padding: '6px 12px', fontSize: '0.78rem' }}>
+            <ShieldCheck size={14} color="#080a0f" /> Zero-Persistence Security
+          </span>
         </div>
 
       </header>
-
-      {/* SaaS Auth Modal */}
-      <SaaSAuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        currentUser={currentUser}
-        setCurrentUser={setCurrentUser}
-      />
     </div>
   );
 }

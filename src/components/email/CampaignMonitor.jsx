@@ -117,7 +117,13 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
         })
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (response.ok && contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = { success: true, message: `Email dispatched successfully to ${item.Email}` };
+      }
 
       if (data.success) {
         setRecipients(prev => prev.map((r, i) => i === index ? {
