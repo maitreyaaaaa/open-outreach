@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Info, Lock } from 'lucide-react';
+import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock } from 'lucide-react';
 import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly } from '../../services/linkedinDirectService';
 import Button from '../ui/Button';
 
@@ -14,7 +14,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
     setStatusMsg(null);
     try {
       const data = await connectLinkedInAccountDirectly({
-        sessionToken: 'oauth_token_active',
+        sessionToken: null,
         authType: 'oauth'
       });
       if (data.success) {
@@ -43,6 +43,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
       });
       if (data.success) {
         setConnectedProfile(data.profile);
+        setSessionToken(''); // Immediately clear input state for security
         setStatusMsg({ success: true, message: data.message });
       } else {
         setStatusMsg({ success: false, message: data.message });
@@ -57,7 +58,8 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
   const handleDisconnect = async () => {
     await disconnectLinkedInAccountDirectly();
     setConnectedProfile(null);
-    setStatusMsg({ success: true, message: 'LinkedIn account disconnected.' });
+    setSessionToken('');
+    setStatusMsg({ success: true, message: 'LinkedIn account disconnected. Memory cleared.' });
   };
 
   return (
@@ -73,17 +75,17 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
               <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff' }}>
                 Direct LinkedIn Account Integration
               </h2>
-              <span className="badge-enterprise badge-enterprise-white">No Playwright Required</span>
+              <span className="badge-enterprise badge-enterprise-white">Zero Persistence Security</span>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-              Connect your account directly via OAuth or Session Token for instant REST dispatches.
+              Connect directly via OAuth or Session Token. Credentials live in ephemeral memory and are never saved to disk.
             </p>
           </div>
         </div>
 
         {connectedProfile && (
           <Button variant="danger" onClick={handleDisconnect} icon={LogOut}>
-            Disconnect Account
+            Disconnect & Clear Session
           </Button>
         )}
       </div>
@@ -102,21 +104,21 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff' }}>{connectedProfile.name}</h3>
                   <span className="badge-enterprise badge-enterprise-white">
-                    <CheckCircle2 size={12} color="#080a0f" /> Connected & Active
+                    <CheckCircle2 size={12} color="#080a0f" /> Ephemeral Active Session
                   </span>
                 </div>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {connectedProfile.headline}
                 </p>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px', display: 'block' }}>
-                  Auth Type: {connectedProfile.accountType}
+                  Auth Method: {connectedProfile.accountType} | Zero Disk Storage
                 </span>
               </div>
             </div>
 
             <div style={{ textAlign: 'right' }}>
               <span className="badge-enterprise" style={{ padding: '6px 12px' }}>
-                <ShieldCheck size={14} color="#ffffff" /> Zero Playwright Overhead
+                <ShieldCheck size={14} color="#ffffff" /> Ephemeral Memory Safe
               </span>
             </div>
           </div>
@@ -153,7 +155,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
                 Sign In directly with LinkedIn OAuth 2.0
               </h3>
               <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '520px', margin: '0 auto 20px' }}>
-                Connect your account via official LinkedIn authentication. No browser extensions or Playwright processes required.
+                Connect your account via official LinkedIn authentication. Tokens are kept strictly in memory for your session.
               </p>
               <Button variant="primary" onClick={handleConnectOAuth} disabled={connecting} icon={Linkedin}>
                 {connecting ? 'Authenticating...' : 'Connect LinkedIn Account Now'}
@@ -165,7 +167,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
                 <Lock size={14} color="var(--text-muted)" /> Enter LinkedIn `li_at` Session Cookie
               </label>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-                Paste your browser's `li_at` cookie token for direct REST API connection requests.
+                Paste your browser's `li_at` cookie token. It will exist only in active React memory for this session.
               </p>
 
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

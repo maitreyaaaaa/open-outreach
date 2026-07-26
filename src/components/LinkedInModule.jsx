@@ -16,15 +16,7 @@ export default function LinkedInModule({
   setTemplate
 }) {
   const [subTab, setSubTab] = useState('recipients');
-  const [connectedProfile, setConnectedProfile] = useState({
-    id: 'user_123',
-    name: 'Sarah Chen',
-    headline: 'VP of Talent & People Operations @ Apex Tech',
-    company: 'Apex Tech',
-    profilePic: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    accountType: 'LinkedIn Direct OAuth 2.0 / REST',
-    status: 'CONNECTED'
-  });
+  const [connectedProfile, setConnectedProfile] = useState(null); // Starts un-connected for security
 
   useEffect(() => {
     animateCardStagger('.glass-enterprise-card, .glass-enterprise-panel');
