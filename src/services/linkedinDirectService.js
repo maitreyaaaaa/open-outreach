@@ -17,11 +17,11 @@ export async function connectLinkedInAccountDirectly({ sessionToken, authType = 
   // Pure Client-Side Web SaaS Fallback Mode (e.g. GitHub Pages)
   return {
     success: true,
-    message: 'LinkedIn account connected successfully in ephemeral browser memory.',
+    message: 'LinkedIn session authenticated in ephemeral browser memory.',
     profile: {
-      name: 'Active LinkedIn Session',
+      name: 'Authenticated LinkedIn Account',
       headline: 'Direct OAuth 2.0 Connected • Zero Persistence Mode',
-      profilePic: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+      profilePic: null, // No photo of a person
       accountType: authType === 'oauth' ? 'OAuth 2.0 Authorized' : 'Direct Session Cookie (`li_at`)'
     }
   };

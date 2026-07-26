@@ -95,11 +95,17 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
         <div className="glass-enterprise-card" style={{ padding: '20px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <img
-                src={connectedProfile.profilePic}
-                alt={connectedProfile.name}
-                style={{ width: '52px', height: '52px', borderRadius: '50%', border: '2px solid #ffffff', objectFit: 'cover' }}
-              />
+              {connectedProfile.profilePic ? (
+                <img
+                  src={connectedProfile.profilePic}
+                  alt={connectedProfile.name}
+                  style={{ width: '52px', height: '52px', borderRadius: '50%', border: '2px solid #ffffff', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{ background: '#0a66c2', width: '52px', height: '52px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #ffffff' }}>
+                  <Linkedin color="#ffffff" size={26} />
+                </div>
+              )}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff' }}>{connectedProfile.name}</h3>
