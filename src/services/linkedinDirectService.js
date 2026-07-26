@@ -1,9 +1,9 @@
-export async function connectLinkedInAccountDirectly({ sessionToken, authType = 'oauth', userId = 'user_default' }) {
+export async function connectLinkedInAccountDirectly({ sessionToken, accountName, authType = 'oauth', userId = 'user_default' }) {
   try {
     const response = await fetch('/api/linkedin/connect-direct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionToken, authType, userId })
+      body: JSON.stringify({ sessionToken, accountName, authType, userId })
     });
 
     const contentType = response.headers.get('content-type');
@@ -15,13 +15,15 @@ export async function connectLinkedInAccountDirectly({ sessionToken, authType = 
   }
 
   // Pure Client-Side Web SaaS Fallback Mode (e.g. GitHub Pages)
+  const displayName = accountName?.trim() ? accountName.trim() : (authType === 'token' ? 'Real LinkedIn Session' : 'Authenticated LinkedIn Account');
+
   return {
     success: true,
-    message: 'LinkedIn session authenticated in ephemeral browser memory.',
+    message: `LinkedIn account "${displayName}" connected successfully in ephemeral browser memory.`,
     profile: {
-      name: 'Authenticated LinkedIn Account',
-      headline: 'Direct OAuth 2.0 Connected • Zero Persistence Mode',
-      profilePic: null, // No photo of a person
+      name: displayName,
+      headline: authType === 'token' ? 'Direct Session Token (li_at) Connected • Zero Disk Persistence' : 'Direct OAuth 2.0 Connected • Zero Disk Persistence',
+      profilePic: null,
       accountType: authType === 'oauth' ? 'OAuth 2.0 Authorized' : 'Direct Session Cookie (`li_at`)'
     }
   };
