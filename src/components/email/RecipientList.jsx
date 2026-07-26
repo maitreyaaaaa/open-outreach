@@ -78,6 +78,14 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
 
   const pendingCount = recipients.filter(r => r.Status === 'Pending').length;
 
+  const sortedFilteredRecipients = [...filteredRecipients].sort((a, b) => {
+    const aValid = isValidEmailSyntax(a.Email);
+    const bValid = isValidEmailSyntax(b.Email);
+    if (aValid && !bValid) return -1;
+    if (!aValid && bValid) return 1;
+    return 0;
+  });
+
   return (
     <div>
       
@@ -128,36 +136,35 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
         {/* Stats Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
           <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '10px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Building2 size={20} color="#ffffff" />
             </div>
             <div>
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Loaded Companies</span>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff' }}>{recipients.length}</h3>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Companies</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{recipients.length}</div>
             </div>
           </div>
 
           <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '10px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ShieldCheck size={20} color="#ffffff" />
             </div>
             <div>
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Syntax Valid</span>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff' }}>{recipients.length - invalidEmails.length}</h3>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Valid Email Syntax</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{recipients.length - invalidEmails.length}</div>
             </div>
           </div>
 
           <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '10px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Clock size={20} color="#ffffff" />
             </div>
             <div>
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Pending Queue</span>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff' }}>{pendingCount}</h3>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Pending Dispatches</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{pendingCount}</div>
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Filter and Search Bar */}
@@ -168,7 +175,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
             type="text"
             className="input-enterprise"
             style={{ paddingLeft: '38px' }}
-            placeholder="Search company, email, or contact name..."
+            placeholder="Search company, email, or contact..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
@@ -209,28 +216,30 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
               </tr>
             </thead>
             <tbody>
-              {filteredRecipients.length === 0 ? (
+              {sortedFilteredRecipients.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: '50px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No companies match your search query. Click <strong>"Load Demo Companies"</strong> or upload a file.
                   </td>
                 </tr>
               ) : (
-                filteredRecipients.map((item, idx) => {
+                sortedFilteredRecipients.map((item, idx) => {
                   const validSyntax = isValidEmailSyntax(item.Email);
 
                   return (
                     <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s' }}>
                       <td style={{ padding: '12px 18px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{idx + 1}</td>
                       <td style={{ padding: '12px 18px', fontWeight: '600', color: '#ffffff' }}>{item.Company}</td>
-                      <td style={{ padding: '12px 18px', color: '#ffffff', fontFamily: 'monospace' }}>{item.Email}</td>
+                      <td style={{ padding: '12px 18px', color: validSyntax ? '#ffffff' : '#f87171', fontFamily: 'monospace' }}>
+                        {validSyntax ? item.Email : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: '600' }}>Invalid Email</span>}
+                      </td>
                       <td style={{ padding: '12px 18px', color: 'var(--text-muted)' }}>{item.ContactPerson}</td>
                       <td style={{ padding: '12px 18px' }}>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          {item.Status === 'Sent' && <span className="badge-enterprise badge-enterprise-white"><Check size={11} /> Sent</span>}
-                          {item.Status === 'Pending' && <span className="badge-enterprise"><Clock size={11} /> Pending</span>}
-                          {item.Status === 'Failed' && <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>}
-                          {!validSyntax && <span className="badge-enterprise">Invalid</span>}
+                          {validSyntax && item.Status === 'Sent' && <span className="badge-enterprise badge-enterprise-white"><Check size={11} /> Sent</span>}
+                          {validSyntax && item.Status === 'Pending' && <span className="badge-enterprise"><Clock size={11} /> Pending</span>}
+                          {validSyntax && item.Status === 'Failed' && <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>}
+                          {!validSyntax && <span className="badge-enterprise" style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}>Invalid Email</span>}
                         </div>
                       </td>
                       <td style={{ padding: '12px 18px', textAlign: 'right' }}>
