@@ -74,21 +74,65 @@ export function generateDemoLinkedInProfiles() {
 }
 
 /**
+ * Checks magic bytes to detect binary files (.xlsx ZIP header PK 0x50 0x4B, .xls OLE2 0xD0 0xCF)
+ */
+function isBinaryFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const arr = new Uint8Array(e.target.result);
+        if (arr.length >= 4) {
+          // 0x50 0x4B = 'PK' (xlsx zip container header)
+          // 0xD0 0xCF = OLE2 (.xls binary excel header)
+          if ((arr[0] === 0x50 && arr[1] === 0x4B) || (arr[0] === 0xD0 && arr[1] === 0xCF)) {
+            return resolve(true);
+          }
+        }
+        // Count non-printable control bytes
+        let binaryCount = 0;
+        for (let i = 0; i < Math.min(arr.length, 512); i++) {
+          if (arr[i] === 0 || (arr[i] < 9 && arr[i] !== 10 && arr[i] !== 13)) {
+            binaryCount++;
+          }
+        }
+        resolve(binaryCount > 2);
+      } catch (err) {
+        resolve(false);
+      }
+    };
+    reader.onerror = () => resolve(false);
+    reader.readAsArrayBuffer(file.slice(0, 1024));
+  });
+}
+
+/**
+ * Sanitizes parsed text to strip binary artifacts, replacement control characters (≡, , \uFFFD)
+ */
+function sanitizeText(str) {
+  if (!str) return '';
+  let s = String(str);
+  // Remove non-printable control characters, replacement chars \uFFFD, and binary symbol artifacts (≡, )
+  s = s.replace(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2261\uFFFD\uFFFC]/g, '');
+  s = s.replace(/≡+/g, '').replace(/\\+/g, ' ').trim();
+  return s;
+}
+
+/**
  * Universal Intelligent File Parser
  * Supports: CSV, XLSX, XLS, TSV files from scrapers (iScraper, Apollo, Clay, Sales Navigator, etc.)
  */
 export async function parseAnyFile(file) {
   const fileName = file.name.toLowerCase();
-  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('sheet') || file.type.includes('excel');
+  const isExcelExt = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('sheet') || file.type.includes('excel');
+  const isBinary = await isBinaryFile(file);
 
-  if (isExcel) {
+  if (isBinary || isExcelExt) {
     return parseExcelFile(file);
   } else {
-    // Attempt CSV parsing; fallback to Excel if binary content detected
     try {
       return await parseCSVFile(file);
     } catch (err) {
-      // If CSV parse failed due to binary format, try Excel parser
       return await parseExcelFile(file);
     }
   }
@@ -103,7 +147,6 @@ function normalizeRowData(row, index) {
   const keys = Object.keys(row);
   if (keys.length === 0) return null;
 
-  // Helper to find key by regex match
   const findKey = (patterns) => {
     return keys.find(k => {
       const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -116,64 +159,62 @@ function normalizeRowData(row, index) {
   const lastNameKey = findKey(['lastname', 'last', 'lname', 'surname', 'familyname']);
   const fullNameKey = findKey(['fullname', 'name', 'contactname', 'investorname', 'personname', 'person', 'contact', 'investor', 'lead', 'target']);
 
-  let name = '';
+  let rawName = '';
   if (firstNameKey && row[firstNameKey]) {
-    const fn = String(row[firstNameKey]).trim();
-    const ln = lastNameKey && row[lastNameKey] ? String(row[lastNameKey]).trim() : '';
-    name = `${fn} ${ln}`.trim();
+    const fn = sanitizeText(row[firstNameKey]);
+    const ln = lastNameKey && row[lastNameKey] ? sanitizeText(row[lastNameKey]) : '';
+    rawName = `${fn} ${ln}`.trim();
   } else if (fullNameKey && row[fullNameKey]) {
-    name = String(row[fullNameKey]).trim();
+    rawName = sanitizeText(row[fullNameKey]);
   } else {
-    // Fallback: look for first text value that looks like a person's name
-    const textVal = keys.map(k => String(row[k] || '').trim()).find(v => v.length > 2 && !v.includes('http') && !v.includes('@'));
-    name = textVal || `Contact #${index + 1}`;
+    const textVal = keys.map(k => sanitizeText(row[k])).find(v => v.length > 2 && !v.includes('http') && !v.includes('@'));
+    rawName = textVal || '';
   }
+
+  const name = sanitizeText(rawName) || `Contact #${index + 1}`;
 
   // 2. Role / Title / Position Detection
   const roleKey = findKey(['role', 'title', 'jobtitle', 'position', 'headline', 'occupation', 'designation', 'investortype', 'type', 'category']);
-  let role = roleKey && row[roleKey] ? String(row[roleKey]).trim() : 'Executive / Investor';
+  let role = roleKey && row[roleKey] ? sanitizeText(row[roleKey]) : 'Executive / Investor';
 
   // 3. Company / Firm / Organization Detection
   const companyKey = findKey(['company', 'firm', 'fund', 'organization', 'org', 'employer', 'workplace', 'account', 'venture', 'business']);
-  let company = companyKey && row[companyKey] ? String(row[companyKey]).trim() : '';
+  let company = companyKey && row[companyKey] ? sanitizeText(row[companyKey]) : '';
   
-  // If company is still empty, extract from headline (e.g. "Managing Partner at Sequoia")
   if (!company && role.toLowerCase().includes(' at ')) {
     const parts = role.split(/ at /i);
     if (parts[1]) {
-      company = parts[1].trim();
-      role = parts[0].trim();
+      company = sanitizeText(parts[1]);
+      role = sanitizeText(parts[0]);
     }
   }
-  if (!company) company = 'Venture Capital / Investment';
+  if (!company) company = 'Investment Firm';
 
   // 4. LinkedIn URL Detection
   const linkedinKey = findKey(['linkedin', 'profileurl', 'profilelink', 'personlinkedinurl', 'linkedinurl', 'url', 'link', 'social']);
   let linkedinUrl = '';
   if (linkedinKey && row[linkedinKey]) {
-    linkedinUrl = String(row[linkedinKey]).trim();
+    linkedinUrl = sanitizeText(row[linkedinKey]);
   } else {
-    // Scan all cell values for a URL starting with linkedin.com or http
-    const urlVal = keys.map(k => String(row[k] || '').trim()).find(v => v.includes('linkedin.com/in/') || v.includes('linkedin.com/pub/'));
+    const urlVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('linkedin.com/in/') || v.includes('linkedin.com/pub/'));
     linkedinUrl = urlVal || '';
   }
 
-  // Ensure valid HTTP format for LinkedIn URL if found
   if (linkedinUrl && !linkedinUrl.startsWith('http')) {
     linkedinUrl = `https://${linkedinUrl.replace(/^\/\//, '')}`;
   }
 
   // 5. Email Detection
   const emailKey = findKey(['email', 'mail', 'emailaddress', 'contactemail']);
-  let email = emailKey && row[emailKey] ? String(row[emailKey]).trim() : '';
+  let email = emailKey && row[emailKey] ? sanitizeText(row[emailKey]) : '';
   if (!email) {
-    const emailVal = keys.map(k => String(row[k] || '').trim()).find(v => v.includes('@') && v.includes('.'));
+    const emailVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('@') && v.includes('.'));
     email = emailVal || '';
   }
 
   // 6. Custom Note Generation
   const noteKey = findKey(['customnote', 'note', 'message', 'intro']);
-  const customNote = noteKey && row[noteKey] ? String(row[noteKey]).trim() : '';
+  const customNote = noteKey && row[noteKey] ? sanitizeText(row[noteKey]) : '';
 
   return {
     id: index + 1,
@@ -224,11 +265,8 @@ export function parseExcelFile(file) {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         
-        // Grab the first sheet with data
-        let sheetName = workbook.SheetNames[0];
-        let sheet = workbook.Sheets[sheetName];
+        let sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-        // Find sheet with most rows if multi-sheet
         for (const name of workbook.SheetNames) {
           if (workbook.Sheets[name] && XLSX.utils.sheet_to_json(workbook.Sheets[name]).length > 0) {
             sheet = workbook.Sheets[name];
