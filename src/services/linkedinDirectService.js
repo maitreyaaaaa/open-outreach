@@ -19,7 +19,7 @@ export async function connectLinkedInAccountDirectly({ sessionToken, accountName
 
   return {
     success: true,
-    message: `LinkedIn account "${displayName}" connected successfully in ephemeral browser memory.`,
+    message: `LinkedIn account "${displayName}" connected successfully in browser memory.`,
     profile: {
       name: displayName,
       headline: authType === 'token' ? 'Direct Session Token (li_at) Connected • Zero Disk Persistence' : 'Direct OAuth 2.0 Connected • Zero Disk Persistence',
@@ -67,9 +67,10 @@ export async function sendDirectConnectionInvitation({ profileUrl, noteText, rec
     // Fallthrough
   }
 
-  // Pure Client-Side Dispatch Fallback
+  // Pure Client-Side Dispatch Fallback (GitHub Pages static hosting)
   return {
     success: true,
-    message: `Direct connection invitation sent to ${recipientName || 'target'}.`
+    isWebFallback: true,
+    message: `Note copied to clipboard! Opening ${recipientName || 'target'}'s LinkedIn profile in a new tab...`
   };
 }
