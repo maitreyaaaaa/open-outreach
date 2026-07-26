@@ -16,6 +16,39 @@
 
 ---
 
+## 🎬 30-Second Product Explainer Video
+
+https://github.com/user-attachments/assets/open-outreach-explainer.mp4
+
+<div align="center">
+  <video src="assets/open-outreach-explainer.mp4" width="100%" controls autoplay loop muted poster="https://raw.githubusercontent.com/maitreyaaaaa/open-outreach/main/assets/poster.png">
+    Your browser does not support the video tag. <a href="assets/open-outreach-explainer.mp4">Click here to watch the explainer video</a>.
+  </video>
+</div>
+
+---
+
+## ℹ️ About OpenOutreach
+
+### What is OpenOutreach?
+**OpenOutreach** is a 100% free, open-source, dual-channel cold outreach platform designed to unify **personalized email campaigns** and **LinkedIn networking** into a single, high-privacy dashboard. 
+
+### Who is it for?
+- **Founders & Startup Builders**: Launch outreach campaigns instantly with zero subscription fees.
+- **SDRs & B2B Sales Teams**: Run multi-channel outreach (Email + LinkedIn) with built-in deliverability checks and account safety guardrails.
+- **Recruiters & Agencies**: Manage prospect lists and personalized templates without risking credential leaks.
+- **Privacy-Conscious Teams**: Eliminate third-party database risks with zero-persistence credential storage.
+
+### How it was built
+Built using a modern web stack designed for speed, privacy, and zero infrastructure overhead:
+* **Frontend**: React 18, Vite, Tailwind CSS, GSAP 3.12, and Anime.js for fluid micro-interactions.
+* **Architecture**: Single Page Application (SPA) hosted statically on **GitHub Pages Global CDN** ($0 hosting).
+* **Email Engine**: Custom CSV Mail Merge, mustache variable substitution (`{{Company}}`, `{{FirstName}}`), and real-time spam keyword risk auditing over SMTP.
+* **LinkedIn Engine**: Direct REST API integration with 1-click OAuth 2.0 authorization — avoiding slow, heavy headless browser tools.
+* **Security Layer**: **Zero-Persistence Session Architecture** — SMTP passwords and API tokens live strictly in browser RAM and vanish on tab close.
+
+---
+
 ## ⚡ Live Web SaaS Version
 
 You can use the full **OpenOutreach** suite directly in your browser without installing anything!
