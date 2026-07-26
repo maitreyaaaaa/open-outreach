@@ -89,7 +89,6 @@ function isBinaryFile(file) {
             return resolve(true);
           }
         }
-        // Count non-printable control bytes
         let binaryCount = 0;
         for (let i = 0; i < Math.min(arr.length, 512); i++) {
           if (arr[i] === 0 || (arr[i] < 9 && arr[i] !== 10 && arr[i] !== 13)) {
@@ -112,10 +111,23 @@ function isBinaryFile(file) {
 function sanitizeText(str) {
   if (!str) return '';
   let s = String(str);
-  // Remove non-printable control characters, replacement chars \uFFFD, and binary symbol artifacts (≡, )
   s = s.replace(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2261\uFFFD\uFFFC]/g, '');
   s = s.replace(/≡+/g, '').replace(/\\+/g, ' ').trim();
   return s;
+}
+
+/**
+ * Sort profiles so Valid LinkedIn URLs come FIRST (top), Invalid URLs come LAST (bottom)
+ */
+export function sortProfilesValidFirst(profiles) {
+  const isValidUrl = (url) => /^https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?$/i.test(String(url || '').trim());
+  return [...profiles].sort((a, b) => {
+    const aValid = isValidUrl(a.LinkedInUrl);
+    const bValid = isValidUrl(b.LinkedInUrl);
+    if (aValid && !bValid) return -1;
+    if (!aValid && bValid) return 1;
+    return 0;
+  });
 }
 
 /**
@@ -127,15 +139,18 @@ export async function parseAnyFile(file) {
   const isExcelExt = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('sheet') || file.type.includes('excel');
   const isBinary = await isBinaryFile(file);
 
+  let rawRows = [];
   if (isBinary || isExcelExt) {
-    return parseExcelFile(file);
+    rawRows = await parseExcelFile(file);
   } else {
     try {
-      return await parseCSVFile(file);
+      rawRows = await parseCSVFile(file);
     } catch (err) {
-      return await parseExcelFile(file);
+      rawRows = await parseExcelFile(file);
     }
   }
+
+  return sortProfilesValidFirst(rawRows);
 }
 
 /**
@@ -143,6 +158,20 @@ export async function parseAnyFile(file) {
  */
 function normalizeRowData(row, index) {
   if (!row || typeof row !== 'object') return null;
+
+  // Ignore internal Excel XML system rows (e.g. xl/theme/theme1.xml, sharedStrings.xml, etc.)
+  const fullRowStr = JSON.stringify(row).toLowerCase();
+  if (
+    fullRowStr.includes('xl/theme') ||
+    fullRowStr.includes('sharedstrings.xml') ||
+    fullRowStr.includes('content_types') ||
+    fullRowStr.includes('theme1.xml') ||
+    fullRowStr.includes('xl/worksheets') ||
+    fullRowStr.includes('.rels') ||
+    fullRowStr.includes('.xml')
+  ) {
+    return null;
+  }
 
   const keys = Object.keys(row);
   if (keys.length === 0) return null;
@@ -154,7 +183,7 @@ function normalizeRowData(row, index) {
     });
   };
 
-  // 1. Name Detection (support split First/Last Name columns or combined Name columns)
+  // 1. Name Detection
   const firstNameKey = findKey(['firstname', 'first', 'fname', 'givenname']);
   const lastNameKey = findKey(['lastname', 'last', 'lname', 'surname', 'familyname']);
   const fullNameKey = findKey(['fullname', 'name', 'contactname', 'investorname', 'personname', 'person', 'contact', 'investor', 'lead', 'target']);
@@ -167,7 +196,7 @@ function normalizeRowData(row, index) {
   } else if (fullNameKey && row[fullNameKey]) {
     rawName = sanitizeText(row[fullNameKey]);
   } else {
-    const textVal = keys.map(k => sanitizeText(row[k])).find(v => v.length > 2 && !v.includes('http') && !v.includes('@'));
+    const textVal = keys.map(k => sanitizeText(row[k])).find(v => v.length > 2 && !v.includes('http') && !v.includes('@') && !v.includes('xml'));
     rawName = textVal || '';
   }
 

@@ -80,6 +80,14 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
     return matchesSearch && r.Status === filterStatus;
   });
 
+  const sortedFilteredRecipients = [...filteredRecipients].sort((a, b) => {
+    const aValid = isValidLinkedInUrl(a.LinkedInUrl);
+    const bValid = isValidLinkedInUrl(b.LinkedInUrl);
+    if (aValid && !bValid) return -1;
+    if (!aValid && bValid) return 1;
+    return 0;
+  });
+
   return (
     <div>
       
@@ -106,7 +114,7 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
 
             <label className="btn-enterprise btn-enterprise-secondary" style={{ cursor: 'pointer' }}>
               <Upload size={15} /> Import CSV
-              <input type="file" accept=".csv" onChange={handleFileUpload} style={{ display: 'none' }} />
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} />
             </label>
 
             <button onClick={() => setShowAddModal(true)} className="btn-enterprise btn-enterprise-secondary">
@@ -178,14 +186,14 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
               </tr>
             </thead>
             <tbody>
-              {filteredRecipients.length === 0 ? (
+              {sortedFilteredRecipients.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: '50px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No profile entries found. Click <strong>"Load 50 Demo Profiles"</strong> or upload a CSV.
                   </td>
                 </tr>
               ) : (
-                filteredRecipients.map((item, idx) => {
+                sortedFilteredRecipients.map((item, idx) => {
                   const validLink = isValidLinkedInUrl(item.LinkedInUrl);
 
                   return (
@@ -193,17 +201,21 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
                       <td style={{ padding: '12px 18px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{idx + 1}</td>
                       <td style={{ padding: '12px 18px', fontWeight: '600', color: '#ffffff' }}>{item.Name}</td>
                       <td style={{ padding: '12px 18px', color: 'var(--text-muted)' }}>{item.Role} @ {item.Company}</td>
-                      <td style={{ padding: '12px 18px', color: validLink ? '#ffffff' : '#a1a1aa', fontFamily: 'monospace', fontSize: '0.82rem' }}>
-                        <a href={item.LinkedInUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {item.LinkedInUrl.replace('https://www.linkedin.com/in/', '')} <ExternalLink size={12} color="var(--text-dim)" />
-                        </a>
+                      <td style={{ padding: '12px 18px', color: validLink ? '#ffffff' : '#f87171', fontFamily: 'monospace', fontSize: '0.82rem' }}>
+                        {validLink ? (
+                          <a href={item.LinkedInUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            {item.LinkedInUrl.replace('https://www.linkedin.com/in/', '')} <ExternalLink size={12} color="var(--text-dim)" />
+                          </a>
+                        ) : (
+                          <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: '600' }}>Invalid</span>
+                        )}
                       </td>
                       <td style={{ padding: '12px 18px' }}>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          {item.Status === 'Sent' && <span className="badge-enterprise badge-enterprise-white"><CheckCircle size={11} /> Sent</span>}
-                          {item.Status === 'Pending' && <span className="badge-enterprise"><Clock size={11} /> Pending</span>}
-                          {item.Status === 'Failed' && <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>}
-                          {!validLink && <span className="badge-enterprise">Invalid URL</span>}
+                          {validLink && item.Status === 'Sent' && <span className="badge-enterprise badge-enterprise-white"><CheckCircle size={11} /> Sent</span>}
+                          {validLink && item.Status === 'Pending' && <span className="badge-enterprise"><Clock size={11} /> Pending</span>}
+                          {validLink && item.Status === 'Failed' && <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>}
+                          {!validLink && <span className="badge-enterprise" style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}>Invalid URL</span>}
                         </div>
                       </td>
                       <td style={{ padding: '12px 18px', textAlign: 'right' }}>
