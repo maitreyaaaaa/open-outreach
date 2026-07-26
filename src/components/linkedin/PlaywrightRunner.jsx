@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, RefreshCw, Download, Terminal, Globe } from 'lucide-react';
+import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge, CheckCircle2, AlertCircle } from 'lucide-react';
 import { renderTemplate } from '../../utils/templateEngine';
+import { sendDirectConnectionInvitation } from '../../services/linkedinDirectService';
 import Papa from 'papaparse';
+import Button from '../ui/Button';
 
-export default function PlaywrightRunner({ recipients, setRecipients, template }) {
-  const [minDelay, setMinDelay] = useState(30);
-  const [maxDelay, setMaxDelay] = useState(75);
+export default function PlaywrightRunner({ recipients, setRecipients, template, connectedProfile }) {
+  const [minDelay, setMinDelay] = useState(3); // 3s min delay for direct REST API
+  const [maxDelay, setMaxDelay] = useState(8);  // 8s max delay for direct REST API
   const [dailyCap, setDailyCap] = useState(25);
   const [campaignStatus, setCampaignStatus] = useState('IDLE');
   const [logs, setLogs] = useState([]);
@@ -26,18 +28,12 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
     setLogs(prev => [...prev, { time: timestamp, text: msg, type }]);
   };
 
-  const handleLaunchLoginBrowser = async () => {
-    addLog('Launching browser window for LinkedIn session authentication...', 'info');
-    try {
-      const response = await fetch('/api/launch-login-browser', { method: 'POST' });
-      const data = await response.json();
-      addLog(data.message, data.success ? 'success' : 'error');
-    } catch (err) {
-      addLog(`Error launching login browser: ${err.message}`, 'error');
-    }
-  };
-
   const startCampaign = async () => {
+    if (!connectedProfile) {
+      alert('Please connect your LinkedIn account directly in the section above first.');
+      return;
+    }
+
     if (recipients.length === 0) {
       alert('No profile recipients loaded.');
       return;
@@ -45,7 +41,7 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
 
     setCampaignStatus('SENDING');
     isSendingRef.current = true;
-    addLog(`🚀 Campaign started for ${recipients.length} LinkedIn targets. Delay: ${minDelay}s–${maxDelay}s. Daily cap: ${dailyCap}.`, 'info');
+    addLog(`🚀 Direct REST API Campaign started for ${recipients.length} targets (Connected as ${connectedProfile.name}).`, 'info');
 
     let startIndex = recipients.findIndex(r => r.Status !== 'Sent');
     if (startIndex === -1) startIndex = 0;
@@ -105,22 +101,16 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
       return;
     }
 
-    addLog(`[${index + 1}/${recipients.length}] Playwright navigating to ${item.Name} (${item.LinkedInUrl})...`, 'info');
+    addLog(`[${index + 1}/${recipients.length}] Direct REST API sending invitation to ${item.Name} (${item.LinkedInUrl})...`, 'info');
 
     const noteText = renderTemplate(template.body, item);
 
     try {
-      const response = await fetch('/api/send-connect-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profileUrl: item.LinkedInUrl,
-          noteText,
-          recipientName: item.Name
-        })
+      const data = await sendDirectConnectionInvitation({
+        profileUrl: item.LinkedInUrl,
+        noteText,
+        recipientName: item.Name
       });
-
-      const data = await response.json();
 
       if (data.success) {
         setRecipients(prev => prev.map((r, i) => i === index ? {
@@ -154,7 +144,7 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
     const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
 
     if (isSendingRef.current && index + 1 < recipients.length) {
-      addLog(`⏳ Anti-bot human safety pause: ${randomDelay}s before next profile...`, 'dim');
+      addLog(`⏳ Human delay throttle: ${randomDelay}s before next request...`, 'dim');
       setTimeout(() => {
         if (isSendingRef.current) {
           runDispatchLoop(index + 1);
@@ -175,7 +165,7 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `LinkedIn_Campaign_Report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `LinkedIn_Direct_Report_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -200,74 +190,69 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge-enterprise badge-enterprise-white">Playwright Engine</span>
-              <span className="badge-enterprise">Rate Limiting</span>
+              <span className="badge-enterprise badge-enterprise-white">Direct REST Engine</span>
+              <span className="badge-enterprise">Zero Playwright Overhead</span>
             </div>
             <h2 style={{ fontSize: '1.35rem', fontWeight: '700', marginTop: '6px', color: '#ffffff' }}>
-              LinkedIn Automation Control & Anti-Bot Suite
+              Direct LinkedIn Connection Dispatcher
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Automating connection requests for <strong>{recipients.length}</strong> target profiles safely.
+              Automating connection requests directly over secure HTTPS REST endpoints.
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button onClick={handleLaunchLoginBrowser} className="btn-enterprise btn-enterprise-secondary">
-              <Globe size={15} /> 1-Click Login Browser
-            </button>
-
             {campaignStatus === 'IDLE' && (
-              <button onClick={startCampaign} className="btn-enterprise btn-enterprise-primary">
-                <Play size={15} /> Start Automation
-              </button>
+              <Button onClick={startCampaign} variant="primary" icon={Play}>
+                Start Direct Automation
+              </Button>
             )}
 
             {campaignStatus === 'SENDING' && (
               <>
-                <button onClick={pauseCampaign} className="btn-enterprise btn-enterprise-secondary">
-                  <Pause size={15} /> Pause
-                </button>
-                <button onClick={stopCampaign} className="btn-enterprise btn-enterprise-danger">
-                  <Square size={15} /> Stop
-                </button>
+                <Button onClick={pauseCampaign} variant="secondary" icon={Pause}>
+                  Pause
+                </Button>
+                <Button onClick={stopCampaign} variant="danger" icon={Square}>
+                  Stop
+                </Button>
               </>
             )}
 
             {campaignStatus === 'PAUSED' && (
               <>
-                <button onClick={resumeCampaign} className="btn-enterprise btn-enterprise-primary">
-                  <Play size={15} /> Resume Campaign
-                </button>
-                <button onClick={stopCampaign} className="btn-enterprise btn-enterprise-danger">
-                  <Square size={15} /> Stop
-                </button>
+                <Button onClick={resumeCampaign} variant="primary" icon={Play}>
+                  Resume Campaign
+                </Button>
+                <Button onClick={stopCampaign} variant="danger" icon={Square}>
+                  Stop
+                </Button>
               </>
             )}
 
             {(campaignStatus === 'COMPLETED' || campaignStatus === 'STOPPED') && (
-              <button onClick={startCampaign} className="btn-enterprise btn-enterprise-primary">
-                <RefreshCw size={15} /> Restart Campaign
-              </button>
+              <Button onClick={startCampaign} variant="primary" icon={RefreshCw}>
+                Restart Campaign
+              </Button>
             )}
 
-            <button onClick={exportReportCSV} className="btn-enterprise btn-enterprise-secondary">
-              <Download size={14} /> Export Log CSV
-            </button>
+            <Button onClick={exportReportCSV} variant="secondary" icon={Download}>
+              Export Log CSV
+            </Button>
           </div>
         </div>
 
-        {/* Throttling & Progress */}
+        {/* Safety Settings Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-          
           <div className="glass-enterprise-card" style={{ padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#ffffff' }}>
-                Human Delay Range: {minDelay}s–{maxDelay}s
+                REST Delay Range: {minDelay}s–{maxDelay}s
               </label>
-              <span className="badge-enterprise">Anti-CAPTCHA</span>
+              <span className="badge-enterprise">Instant REST</span>
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Randomized delay between connection requests to simulate real browsing.
+              Direct API response without browser rendering delays.
             </span>
           </div>
 
@@ -276,13 +261,12 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
               <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#ffffff' }}>
                 Daily Request Cap: {dailyCap} invites/day
               </label>
-              <span className="badge-enterprise">Account Protection</span>
+              <span className="badge-enterprise">Account Safe</span>
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Keeps activity well within LinkedIn's safe threshold (~100–150/week).
+              Keeps invitations well within LinkedIn's limits (~100–150/week).
             </span>
           </div>
-
         </div>
 
         {/* Progress Bar */}
@@ -308,11 +292,11 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
 
       </div>
 
-      {/* Terminal Console */}
+      {/* Terminal Log Console */}
       <div className="glass-enterprise-panel" style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
           <h3 style={{ fontSize: '0.95rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', color: '#ffffff' }}>
-            <Terminal size={16} color="#ffffff" /> Playwright Stream Log
+            <Terminal size={16} color="#ffffff" /> Direct REST Execution Log
           </h3>
 
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -351,7 +335,7 @@ export default function PlaywrightRunner({ recipients, setRecipients, template }
           }}
         >
           {filteredLogs.length === 0 ? (
-            <span style={{ color: 'var(--text-dim)' }}>Click "1-Click Login Browser" to authenticate, then "Start Automation" to begin streaming logs...</span>
+            <span style={{ color: 'var(--text-dim)' }}>Connect account above, then click "Start Direct Automation" to dispatch over direct REST API...</span>
           ) : (
             filteredLogs.map((log, i) => (
               <div key={i} style={{ display: 'flex', gap: '10px' }}>

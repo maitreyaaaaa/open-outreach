@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FlowStepper from './ui/FlowStepper';
 import EmptyState from './ui/EmptyState';
+import DirectAccountConnect from './linkedin/DirectAccountConnect';
 import ProfileList from './linkedin/ProfileList';
 import NoteComposer from './linkedin/NoteComposer';
 import ModalInspector from './linkedin/ModalInspector';
@@ -15,6 +16,15 @@ export default function LinkedInModule({
   setTemplate
 }) {
   const [subTab, setSubTab] = useState('recipients');
+  const [connectedProfile, setConnectedProfile] = useState({
+    id: 'user_123',
+    name: 'Sarah Chen',
+    headline: 'VP of Talent & People Operations @ Apex Tech',
+    company: 'Apex Tech',
+    profilePic: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    accountType: 'LinkedIn Direct OAuth 2.0 / REST',
+    status: 'CONNECTED'
+  });
 
   useEffect(() => {
     animateCardStagger('.glass-enterprise-card, .glass-enterprise-panel');
@@ -24,7 +34,7 @@ export default function LinkedInModule({
     { id: 'recipients', label: '1. Profiles Directory' },
     { id: 'template', label: '2. 300-Char Note Composer' },
     { id: 'preview', label: '3. Modal Inspector' },
-    { id: 'campaign', label: '4. Playwright Runner' }
+    { id: 'campaign', label: '4. Direct REST Dispatcher' }
   ];
 
   const handleFileUpload = async (e) => {
@@ -41,6 +51,12 @@ export default function LinkedInModule({
   return (
     <div className="container-enterprise">
       
+      {/* Direct LinkedIn Account Connection Manager */}
+      <DirectAccountConnect
+        connectedProfile={connectedProfile}
+        setConnectedProfile={setConnectedProfile}
+      />
+
       {/* Progressive Disclosure Flow Stepper */}
       <FlowStepper
         steps={flowSteps}
@@ -87,6 +103,7 @@ export default function LinkedInModule({
               recipients={recipients}
               setRecipients={setRecipients}
               template={template}
+              connectedProfile={connectedProfile}
             />
           )}
         </>

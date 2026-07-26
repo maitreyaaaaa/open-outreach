@@ -1,7 +1,15 @@
-import React from 'react';
-import { LayoutDashboard, Mail, Linkedin, Server, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, Mail, Linkedin, User, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import SaaSAuthModal from './saas/SaaSAuthModal';
 
 export default function Navbar({ activeModule, setActiveModule, emailCount, linkedinCount, isSmtpConnected, smtpUser }) {
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState({
+    name: 'Sarah Chen',
+    email: 'sarah@apextech.io',
+    plan: 'Enterprise Pro'
+  });
+
   const modules = [
     { id: 'overview', label: 'Overview Hub', icon: LayoutDashboard },
     { id: 'email', label: 'Email Outreach', icon: Mail, badge: emailCount },
@@ -20,12 +28,12 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.01em' }}>
-                Enterprise Outreach Suite
+                Enterprise Outreach SaaS
               </h1>
-              <span className="badge-enterprise badge-enterprise-white">Unified Platform</span>
+              <span className="badge-enterprise badge-enterprise-white">Direct REST SaaS</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Dual-Channel Email & LinkedIn Automated Outreach
+              Multi-Tenant Dual-Channel Engine (Email & Direct LinkedIn REST)
             </p>
           </div>
         </div>
@@ -70,20 +78,26 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
           })}
         </nav>
 
-        {/* System Health */}
+        {/* Account & SaaS Workspace */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {isSmtpConnected ? (
-            <span className="badge-enterprise badge-enterprise-white" style={{ padding: '4px 10px', textTransform: 'none' }}>
-              <CheckCircle2 size={13} color="#080a0f" /> {smtpUser || 'SMTP Ready'}
-            </span>
-          ) : (
-            <span className="badge-enterprise" style={{ padding: '4px 10px', textTransform: 'none' }}>
-              <ShieldCheck size={13} /> Playwright Ready
-            </span>
-          )}
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="btn-enterprise btn-enterprise-secondary"
+            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+          >
+            <User size={14} /> {currentUser ? currentUser.name : 'Sign In'}
+          </button>
         </div>
 
       </header>
+
+      {/* SaaS Auth Modal */}
+      <SaaSAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+      />
     </div>
   );
 }
