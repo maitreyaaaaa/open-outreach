@@ -6,7 +6,7 @@ import TemplateEditor from './email/TemplateEditor';
 import EmailPreviewer from './email/EmailPreviewer';
 import SmtpSettings from './email/SmtpSettings';
 import CampaignMonitor from './email/CampaignMonitor';
-import { generateDemoCompanies, parseCSVFile } from '../utils/csvParser';
+import { generateDemoCompanies, parseAnyFile } from '../utils/csvParser';
 import { animateCardStagger } from '../utils/animationEngine';
 
 export default function EmailModule({
@@ -41,7 +41,7 @@ export default function EmailModule({
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const parsed = await parseCSVFile(file);
+      const parsed = await parseAnyFile(file);
       setRecipients(parsed);
     } catch (err) {
       alert(err.message || 'File import failed.');

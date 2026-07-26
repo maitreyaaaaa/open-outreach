@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, Building2, ShieldCheck, Check } from 'lucide-react';
-import { parseCSVFile, parseExcelFile, generateDemoCompanies } from '../../utils/csvParser';
+import { parseAnyFile, generateDemoCompanies } from '../../utils/csvParser';
 
 export default function RecipientList({ recipients, setRecipients, onNext }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,12 +18,7 @@ export default function RecipientList({ recipients, setRecipients, onNext }) {
 
     setErrorMsg(null);
     try {
-      let parsed = [];
-      if (file.name.endsWith('.csv')) {
-        parsed = await parseCSVFile(file);
-      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        parsed = await parseExcelFile(file);
-      }
+      const parsed = await parseAnyFile(file);
       setRecipients(parsed);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to parse file.');

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, ExternalLink } from 'lucide-react';
-import { parseCSVFile, generateDemoLinkedInProfiles } from '../../utils/csvParser';
+import { parseAnyFile, generateDemoLinkedInProfiles } from '../../utils/csvParser';
 
 export default function ProfileList({ recipients, setRecipients, onNext }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,10 +19,10 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
 
     setErrorMsg(null);
     try {
-      const parsed = await parseCSVFile(file);
+      const parsed = await parseAnyFile(file);
       setRecipients(parsed);
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to parse CSV file.');
+      setErrorMsg(err.message || 'Failed to parse file.');
     }
   };
 

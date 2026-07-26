@@ -43,8 +43,8 @@ export function generateDemoCompanies() {
 }
 
 export function generateDemoLinkedInProfiles() {
-  const roles = ['Head of Talent', 'VP of Engineering', 'Product Lead', 'Growth Marketing Director', 'Chief Technology Officer', 'Founder & CEO', 'Talent Acquisition Manager', 'Director of Sales'];
-  const companies = ['Apex Systems', 'Nexus AI', 'Vertex Cloud', 'Nova Digital', 'Pulse Analytics', 'Horizon Media', 'Quantum Labs', 'Starlight Tech'];
+  const roles = ['Angel Investor', 'Managing Partner', 'Venture Partner', 'General Partner', 'Founder & Investor', 'Principal Investor', 'Investment Director', 'Head of Investments'];
+  const companies = ['Apex Capital', 'Nexus Ventures', 'Vertex Angel Fund', 'Nova Seed Fund', 'Pulse Syndicate', 'Horizon Angels', 'Quantum Fund', 'Starlight Capital'];
   const firstNames = ['Sarah', 'Michael', 'Alex', 'Elena', 'David', 'Jessica', 'James', 'Rachel', 'Daniel', 'Sophia', 'Chris', 'Amanda'];
   const lastNames = ['Chen', 'Smith', 'Johnson', 'Miller', 'Davis', 'Wilson', 'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris'];
 
@@ -63,7 +63,7 @@ export function generateDemoLinkedInProfiles() {
       Company: company,
       Role: role,
       LinkedInUrl: `https://www.linkedin.com/in/${handle}`,
-      CustomNote: `Hi ${fn}, noticed your leadership at ${company} as ${role}. Would love to connect and follow your updates!`,
+      CustomNote: `Hi ${fn}, noticed your work at ${company} as ${role}. Would love to connect and share updates on our venture!`,
       Status: 'Pending',
       SentAt: null,
       Error: null
@@ -73,36 +73,140 @@ export function generateDemoLinkedInProfiles() {
   return demoData;
 }
 
+/**
+ * Universal Intelligent File Parser
+ * Supports: CSV, XLSX, XLS, TSV files from scrapers (iScraper, Apollo, Clay, Sales Navigator, etc.)
+ */
+export async function parseAnyFile(file) {
+  const fileName = file.name.toLowerCase();
+  const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('sheet') || file.type.includes('excel');
+
+  if (isExcel) {
+    return parseExcelFile(file);
+  } else {
+    // Attempt CSV parsing; fallback to Excel if binary content detected
+    try {
+      return await parseCSVFile(file);
+    } catch (err) {
+      // If CSV parse failed due to binary format, try Excel parser
+      return await parseExcelFile(file);
+    }
+  }
+}
+
+/**
+ * Smart Column Mapper for Raw Scraped Objects
+ */
+function normalizeRowData(row, index) {
+  if (!row || typeof row !== 'object') return null;
+
+  const keys = Object.keys(row);
+  if (keys.length === 0) return null;
+
+  // Helper to find key by regex match
+  const findKey = (patterns) => {
+    return keys.find(k => {
+      const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return patterns.some(p => cleanKey.includes(p));
+    });
+  };
+
+  // 1. Name Detection (support split First/Last Name columns or combined Name columns)
+  const firstNameKey = findKey(['firstname', 'first', 'fname', 'givenname']);
+  const lastNameKey = findKey(['lastname', 'last', 'lname', 'surname', 'familyname']);
+  const fullNameKey = findKey(['fullname', 'name', 'contactname', 'investorname', 'personname', 'person', 'contact', 'investor', 'lead', 'target']);
+
+  let name = '';
+  if (firstNameKey && row[firstNameKey]) {
+    const fn = String(row[firstNameKey]).trim();
+    const ln = lastNameKey && row[lastNameKey] ? String(row[lastNameKey]).trim() : '';
+    name = `${fn} ${ln}`.trim();
+  } else if (fullNameKey && row[fullNameKey]) {
+    name = String(row[fullNameKey]).trim();
+  } else {
+    // Fallback: look for first text value that looks like a person's name
+    const textVal = keys.map(k => String(row[k] || '').trim()).find(v => v.length > 2 && !v.includes('http') && !v.includes('@'));
+    name = textVal || `Contact #${index + 1}`;
+  }
+
+  // 2. Role / Title / Position Detection
+  const roleKey = findKey(['role', 'title', 'jobtitle', 'position', 'headline', 'occupation', 'designation', 'investortype', 'type', 'category']);
+  let role = roleKey && row[roleKey] ? String(row[roleKey]).trim() : 'Executive / Investor';
+
+  // 3. Company / Firm / Organization Detection
+  const companyKey = findKey(['company', 'firm', 'fund', 'organization', 'org', 'employer', 'workplace', 'account', 'venture', 'business']);
+  let company = companyKey && row[companyKey] ? String(row[companyKey]).trim() : '';
+  
+  // If company is still empty, extract from headline (e.g. "Managing Partner at Sequoia")
+  if (!company && role.toLowerCase().includes(' at ')) {
+    const parts = role.split(/ at /i);
+    if (parts[1]) {
+      company = parts[1].trim();
+      role = parts[0].trim();
+    }
+  }
+  if (!company) company = 'Venture Capital / Investment';
+
+  // 4. LinkedIn URL Detection
+  const linkedinKey = findKey(['linkedin', 'profileurl', 'profilelink', 'personlinkedinurl', 'linkedinurl', 'url', 'link', 'social']);
+  let linkedinUrl = '';
+  if (linkedinKey && row[linkedinKey]) {
+    linkedinUrl = String(row[linkedinKey]).trim();
+  } else {
+    // Scan all cell values for a URL starting with linkedin.com or http
+    const urlVal = keys.map(k => String(row[k] || '').trim()).find(v => v.includes('linkedin.com/in/') || v.includes('linkedin.com/pub/'));
+    linkedinUrl = urlVal || '';
+  }
+
+  // Ensure valid HTTP format for LinkedIn URL if found
+  if (linkedinUrl && !linkedinUrl.startsWith('http')) {
+    linkedinUrl = `https://${linkedinUrl.replace(/^\/\//, '')}`;
+  }
+
+  // 5. Email Detection
+  const emailKey = findKey(['email', 'mail', 'emailaddress', 'contactemail']);
+  let email = emailKey && row[emailKey] ? String(row[emailKey]).trim() : '';
+  if (!email) {
+    const emailVal = keys.map(k => String(row[k] || '').trim()).find(v => v.includes('@') && v.includes('.'));
+    email = emailVal || '';
+  }
+
+  // 6. Custom Note Generation
+  const noteKey = findKey(['customnote', 'note', 'message', 'intro']);
+  const customNote = noteKey && row[noteKey] ? String(row[noteKey]).trim() : '';
+
+  return {
+    id: index + 1,
+    Name: name,
+    Company: company,
+    Role: role,
+    Email: email,
+    LinkedInUrl: linkedinUrl,
+    ContactPerson: name,
+    CustomNote: customNote,
+    Status: 'Pending',
+    SentAt: null,
+    Error: null
+  };
+}
+
 export function parseCSVFile(file) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
+      dynamicTyping: false,
       complete: (results) => {
         if (results.data && results.data.length > 0) {
-          const formatted = results.data.map((row, index) => {
-            const keys = Object.keys(row);
-            const companyKey = keys.find(k => k.toLowerCase().includes('company') || k.toLowerCase().includes('org')) || keys[0];
-            const emailKey = keys.find(k => k.toLowerCase().includes('email') || k.toLowerCase().includes('mail')) || keys[1];
-            const nameKey = keys.find(k => k.toLowerCase().includes('name') || k.toLowerCase().includes('contact')) || keys[2];
-            const urlKey = keys.find(k => k.toLowerCase().includes('url') || k.toLowerCase().includes('linkedin'));
+          const formatted = results.data
+            .map((row, index) => normalizeRowData(row, index))
+            .filter(Boolean);
 
-            return {
-              id: index + 1,
-              Company: row[companyKey] ? String(row[companyKey]).trim() : `Company #${index + 1}`,
-              Email: row[emailKey] ? String(row[emailKey]).trim() : '',
-              LinkedInUrl: row[urlKey] ? String(row[urlKey]).trim() : (row.LinkedInUrl || ''),
-              ContactPerson: row[nameKey] ? String(row[nameKey]).trim() : 'Hiring Manager',
-              Role: row.Role || 'Executive',
-              Name: row.Name || row[nameKey] || 'Contact',
-              CustomNote: row.CustomNote || '',
-              Status: 'Pending',
-              SentAt: null,
-              Error: null
-            };
-          });
-
-          resolve(formatted);
+          if (formatted.length > 0) {
+            resolve(formatted);
+          } else {
+            reject(new Error('Could not parse valid profile rows from CSV.'));
+          }
         } else {
           reject(new Error('No data found in CSV file.'));
         }
@@ -118,35 +222,33 @@ export function parseExcelFile(file) {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.SheetNames[0];
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        
+        // Grab the first sheet with data
+        let sheetName = workbook.SheetNames[0];
+        let sheet = workbook.Sheets[sheetName];
+
+        // Find sheet with most rows if multi-sheet
+        for (const name of workbook.SheetNames) {
+          if (workbook.Sheets[name] && XLSX.utils.sheet_to_json(workbook.Sheets[name]).length > 0) {
+            sheet = workbook.Sheets[name];
+            break;
+          }
+        }
+
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         
         if (rows && rows.length > 0) {
-          const formatted = rows.map((row, index) => {
-            const keys = Object.keys(row);
-            const companyKey = keys.find(k => k.toLowerCase().includes('company')) || keys[0];
-            const emailKey = keys.find(k => k.toLowerCase().includes('email')) || keys[1];
-            const nameKey = keys.find(k => k.toLowerCase().includes('name')) || keys[2];
-
-            return {
-              id: index + 1,
-              Company: row[companyKey] ? String(row[companyKey]).trim() : `Company #${index + 1}`,
-              Email: row[emailKey] ? String(row[emailKey]).trim() : '',
-              ContactPerson: row[nameKey] ? String(row[nameKey]).trim() : 'Hiring Manager',
-              CustomNote: row.CustomNote || '',
-              Status: 'Pending',
-              SentAt: null,
-              Error: null
-            };
-          });
+          const formatted = rows
+            .map((row, index) => normalizeRowData(row, index))
+            .filter(Boolean);
 
           resolve(formatted);
         } else {
           reject(new Error('No data found in Excel sheet.'));
         }
       } catch (err) {
-        reject(err);
+        reject(new Error(`Excel parsing error: ${err.message}`));
       }
     };
     reader.onerror = (error) => reject(error);
