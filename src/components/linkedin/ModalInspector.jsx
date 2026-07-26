@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, ChevronLeft, ChevronRight, Send, CheckCircle2, AlertCircle, Linkedin, Shuffle } from 'lucide-react';
 import { renderTemplate } from '../../utils/templateEngine';
+import { sendDirectConnectionInvitation } from '../../services/linkedinDirectService';
 
 export default function ModalInspector({ recipients, template, onNext }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -39,21 +40,16 @@ export default function ModalInspector({ recipients, template, onNext }) {
     setTestStatus(null);
 
     try {
-      const response = await fetch('/api/send-connect-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profileUrl: currentRecord.LinkedInUrl,
-          noteText: renderedNote,
-          recipientName: currentRecord.Name
-        })
+      const res = await sendDirectConnectionInvitation({
+        profileUrl: currentRecord.LinkedInUrl,
+        noteText: renderedNote,
+        recipientName: currentRecord.Name
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setTestStatus({ success: true, message: data.message });
+      if (res.success) {
+        setTestStatus({ success: true, message: res.message });
       } else {
-        setTestStatus({ success: false, message: data.message });
+        setTestStatus({ success: false, message: res.message });
       }
     } catch (err) {
       setTestStatus({ success: false, message: err.message || 'Network error sending request.' });
