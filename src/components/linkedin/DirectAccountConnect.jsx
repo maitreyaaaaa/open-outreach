@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info, ExternalLink, Terminal } from 'lucide-react';
-import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly, checkLocalAutomationServerHealth, launchLoginBrowser } from '../../services/linkedinDirectService';
+import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info, ExternalLink } from 'lucide-react';
+import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly } from '../../services/linkedinDirectService';
 import Button from '../ui/Button';
 
 export default function DirectAccountConnect({ connectedProfile, setConnectedProfile }) {
@@ -12,19 +12,6 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
   const [showOAuthGuide, setShowOAuthGuide] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
-
-  // Server health state
-  const [serverHealth, setServerHealth] = useState({ online: false, origin: null });
-
-  useEffect(() => {
-    const checkHealth = async () => {
-      const res = await checkLocalAutomationServerHealth();
-      setServerHealth(res);
-    };
-    checkHealth();
-    const interval = setInterval(checkHealth, 8000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Check URL parameters for LinkedIn OAuth 2.0 authorization code callback (?code=...)
   useEffect(() => {
@@ -117,12 +104,6 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
     setStatusMsg({ success: true, message: 'LinkedIn account disconnected. Ephemeral memory wiped.' });
   };
 
-  const handleLaunchChrome = async () => {
-    setStatusMsg({ success: true, message: 'Launching Playwright Chrome session...' });
-    const res = await launchLoginBrowser();
-    setStatusMsg({ success: res.success, message: res.message });
-  };
-
   return (
     <div className="glass-enterprise-panel" style={{ padding: '28px', marginBottom: '28px' }}>
       
@@ -139,24 +120,23 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
               </h2>
               <span className="badge-enterprise badge-enterprise-white">Zero Persistence Security</span>
               
-              {/* Live Playwright Automation Engine Status Badge */}
               <span 
                 className="badge-enterprise"
                 style={{
-                  background: serverHealth.online ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                  borderColor: serverHealth.online ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)',
-                  color: serverHealth.online ? '#4ade80' : '#facc15',
+                  background: 'rgba(34, 197, 94, 0.15)',
+                  borderColor: 'rgba(34, 197, 94, 0.3)',
+                  color: '#4ade80',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}
               >
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: serverHealth.online ? '#22c55e' : '#eab308' }}></span>
-                {serverHealth.online ? `Playwright Server Engine Online (${serverHealth.origin})` : 'Web SaaS Mode (Run node server.js for 100% Background Automation)'}
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></span>
+                Direct Web SaaS HTTPS REST Engine Active
               </span>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Connect your LinkedIn account via 1-Click OAuth 2.0 or Session Cookie. Credentials live exclusively in ephemeral RAM.
+              Connect your LinkedIn account via 1-Click OAuth 2.0 or Session Cookie (`li_at`). Dispatches requests directly over HTTPS just like Gmail.
             </p>
           </div>
         </div>
