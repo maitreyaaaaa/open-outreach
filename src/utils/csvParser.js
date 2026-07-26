@@ -83,8 +83,6 @@ function isBinaryFile(file) {
       try {
         const arr = new Uint8Array(e.target.result);
         if (arr.length >= 4) {
-          // 0x50 0x4B = 'PK' (xlsx zip container header)
-          // 0xD0 0xCF = OLE2 (.xls binary excel header)
           if ((arr[0] === 0x50 && arr[1] === 0x4B) || (arr[0] === 0xD0 && arr[1] === 0xCF)) {
             return resolve(true);
           }
@@ -132,7 +130,6 @@ export function sortProfilesValidFirst(profiles) {
 
 /**
  * Universal Intelligent File Parser
- * Supports: CSV, XLSX, XLS, TSV files from scrapers (iScraper, Apollo, Clay, Sales Navigator, etc.)
  */
 export async function parseAnyFile(file) {
   const fileName = file.name.toLowerCase();
@@ -159,16 +156,13 @@ export async function parseAnyFile(file) {
 function normalizeRowData(row, index) {
   if (!row || typeof row !== 'object') return null;
 
-  // Ignore internal Excel XML system rows (e.g. xl/theme/theme1.xml, sharedStrings.xml, etc.)
+  // Only ignore exact internal Excel ZIP metadata paths
   const fullRowStr = JSON.stringify(row).toLowerCase();
   if (
     fullRowStr.includes('xl/theme') ||
     fullRowStr.includes('sharedstrings.xml') ||
-    fullRowStr.includes('content_types') ||
-    fullRowStr.includes('theme1.xml') ||
-    fullRowStr.includes('xl/worksheets') ||
-    fullRowStr.includes('.rels') ||
-    fullRowStr.includes('.xml')
+    fullRowStr.includes('[content_types].xml') ||
+    fullRowStr.includes('_rels/.rels')
   ) {
     return null;
   }
@@ -196,7 +190,7 @@ function normalizeRowData(row, index) {
   } else if (fullNameKey && row[fullNameKey]) {
     rawName = sanitizeText(row[fullNameKey]);
   } else {
-    const textVal = keys.map(k => sanitizeText(row[k])).find(v => v.length > 2 && !v.includes('http') && !v.includes('@') && !v.includes('xml'));
+    const textVal = keys.map(k => sanitizeText(row[k])).find(v => v.length > 2 && !v.includes('http') && !v.includes('@'));
     rawName = textVal || '';
   }
 
@@ -273,13 +267,30 @@ export function parseCSVFile(file) {
             .filter(Boolean);
 
           if (formatted.length > 0) {
-            resolve(formatted);
-          } else {
-            reject(new Error('Could not parse valid profile rows from CSV.'));
+            return resolve(formatted);
           }
-        } else {
-          reject(new Error('No data found in CSV file.'));
         }
+        
+        // Unconditional Fallback: Parse CSV without header mode
+        Papa.parse(file, {
+          header: false,
+          skipEmptyLines: 'greedy',
+          complete: (rawResults) => {
+            if (rawResults.data && rawResults.data.length > 0) {
+              const fallbackFormatted = rawResults.data.map((rowArr, index) => {
+                const rowObj = {};
+                rowArr.forEach((val, i) => { rowObj[`col_${i}`] = val; });
+                return normalizeRowData(rowObj, index);
+              }).filter(Boolean);
+
+              if (fallbackFormatted.length > 0) {
+                return resolve(fallbackFormatted);
+              }
+            }
+            reject(new Error('No readable data rows found in CSV file.'));
+          },
+          error: (err) => reject(err)
+        });
       },
       error: (err) => reject(err)
     });
