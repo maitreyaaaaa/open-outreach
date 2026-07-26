@@ -142,12 +142,6 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {serverHealth.online && (
-            <Button variant="secondary" onClick={handleLaunchChrome} icon={Terminal}>
-              Launch Chrome Session
-            </Button>
-          )}
-
           {connectedProfile && (
             <Button variant="danger" onClick={handleDisconnect} icon={LogOut}>
               Disconnect & Clear Session
