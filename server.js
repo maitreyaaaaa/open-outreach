@@ -5,7 +5,20 @@ import { chromium } from 'playwright';
 import path from 'path';
 
 const app = express();
-app.use(cors());
+
+// Permissive CORS middleware for local automation engine
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 // Ephemeral Session Storage for Direct LinkedIn Accounts
@@ -101,11 +114,6 @@ app.post('/api/linkedin/send-direct-connect', async (req, res) => {
 
     if (noteText.length > 300) {
       return res.status(400).json({ success: false, message: 'Note exceeds LinkedIn 300 character limit.' });
-    }
-
-    const session = directLinkedInSessions[userId || 'default'];
-    if (!session && !process.env.ALLOW_ANONYMOUS_DISPATCH) {
-      // Proceed with background Playwright automation fallback
     }
 
     console.log(`[Direct LinkedIn API] Dispatching connection invitation to: ${profileUrl}`);
