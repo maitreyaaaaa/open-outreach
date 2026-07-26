@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, ExternalLink } from 'lucide-react';
-import { parseAnyFile, generateDemoLinkedInProfiles } from '../../utils/csvParser';
+import { parseAnyFile, generateDemoLinkedInProfiles, isValidLinkedInUrl } from '../../utils/csvParser';
 
 export default function ProfileList({ recipients, setRecipients, onNext }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,10 +61,6 @@ export default function ProfileList({ recipients, setRecipients, onNext }) {
 
   const handleClearAll = () => {
     if (window.confirm('Clear all LinkedIn profile entries?')) setRecipients([]);
-  };
-
-  const isValidLinkedInUrl = (url) => {
-    return /^https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?$/.test(url.trim());
   };
 
   const invalidUrls = recipients.filter(r => !isValidLinkedInUrl(r.LinkedInUrl));

@@ -104,7 +104,44 @@ function isBinaryFile(file) {
 }
 
 /**
- * Sanitizes parsed text to strip binary artifacts, replacement control characters (≡, , \uFFFD)
+ * Robust LinkedIn URL Validator
+ * Accepts all subdomains (in.linkedin.com, uk.linkedin.com), handles, query tracking params, and sales nav links.
+ */
+export function isValidLinkedInUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const cleaned = url.trim().toLowerCase();
+  if (cleaned.length < 10) return false;
+
+  // Must contain linkedin.com OR be a valid HTTP(S) URL
+  const isLinkedIn = cleaned.includes('linkedin.com') || cleaned.includes('linkedin.com/in/') || cleaned.includes('linkedin.com/sales/');
+  const isHttpUrl = /^https?:\/\/[^\s/$.?#].[^\s]*$/i.test(cleaned);
+
+  return isLinkedIn || isHttpUrl;
+}
+
+/**
+ * Normalizes LinkedIn URL by cleaning tracking parameters and adding protocol
+ */
+export function normalizeLinkedInUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  let u = url.trim();
+  if (!u) return '';
+
+  // Clean trailing query parameters (e.g. ?miniProfileUrn=...)
+  if (u.includes('?')) {
+    u = u.split('?')[0];
+  }
+
+  // Prepend protocol if missing
+  if (!u.startsWith('http://') && !u.startsWith('https://')) {
+    u = `https://${u.replace(/^\/\//, '')}`;
+  }
+
+  return u;
+}
+
+/**
+ * Sanitizes text to strip binary artifacts and control characters
  */
 function sanitizeText(str) {
   if (!str) return '';
@@ -118,10 +155,9 @@ function sanitizeText(str) {
  * Sort profiles so Valid LinkedIn URLs come FIRST (top), Invalid URLs come LAST (bottom)
  */
 export function sortProfilesValidFirst(profiles) {
-  const isValidUrl = (url) => /^https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?$/i.test(String(url || '').trim());
   return [...profiles].sort((a, b) => {
-    const aValid = isValidUrl(a.LinkedInUrl);
-    const bValid = isValidUrl(b.LinkedInUrl);
+    const aValid = isValidLinkedInUrl(a.LinkedInUrl);
+    const bValid = isValidLinkedInUrl(b.LinkedInUrl);
     if (aValid && !bValid) return -1;
     if (!aValid && bValid) return 1;
     return 0;
@@ -147,7 +183,11 @@ export async function parseAnyFile(file) {
     }
   }
 
-  return sortProfilesValidFirst(rawRows);
+  const sorted = sortProfilesValidFirst(rawRows);
+  const validCount = sorted.filter(r => isValidLinkedInUrl(r.LinkedInUrl)).length;
+  console.log(`[Parser Debug] Parsed ${file.name}: ${sorted.length} total rows (${validCount} valid LinkedIn URLs, ${sorted.length - validCount} invalid).`);
+
+  return sorted;
 }
 
 /**
@@ -156,19 +196,27 @@ export async function parseAnyFile(file) {
 function normalizeRowData(row, index) {
   if (!row || typeof row !== 'object') return null;
 
-  // Only ignore exact internal Excel ZIP metadata paths
   const fullRowStr = JSON.stringify(row).toLowerCase();
+
+  // Ignore internal Excel ZIP metadata paths
   if (
     fullRowStr.includes('xl/theme') ||
     fullRowStr.includes('sharedstrings.xml') ||
     fullRowStr.includes('[content_types].xml') ||
-    fullRowStr.includes('_rels/.rels')
+    fullRowStr.includes('_rels/.rels') ||
+    fullRowStr.includes('xl/worksheets')
   ) {
     return null;
   }
 
   const keys = Object.keys(row);
   if (keys.length === 0) return null;
+
+  // Check if row is a formula garbage token (e.g. 4Gf3,Q*)
+  const allValuesStr = keys.map(k => String(row[k] || '')).join(' ');
+  if (/^[a-z0-9,\*<>\^\$!≡\\\|\?\s]{1,12}$/i.test(allValuesStr.trim()) && !allValuesStr.includes('http')) {
+    return null; // Ignore formula garbage row
+  }
 
   const findKey = (patterns) => {
     return keys.find(k => {
@@ -213,19 +261,25 @@ function normalizeRowData(row, index) {
   }
   if (!company) company = 'Investment Firm';
 
-  // 4. LinkedIn URL Detection
+  // 4. LinkedIn URL Detection — Intelligent Multi-Strategy Matcher
   const linkedinKey = findKey(['linkedin', 'profileurl', 'profilelink', 'personlinkedinurl', 'linkedinurl', 'url', 'link', 'social']);
-  let linkedinUrl = '';
+  let rawUrl = '';
   if (linkedinKey && row[linkedinKey]) {
-    linkedinUrl = sanitizeText(row[linkedinKey]);
-  } else {
-    const urlVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('linkedin.com/in/') || v.includes('linkedin.com/pub/'));
-    linkedinUrl = urlVal || '';
+    rawUrl = sanitizeText(row[linkedinKey]);
+  }
+  
+  // If key search didn't yield a valid URL, search ALL cell values in row for any URL containing linkedin.com or http
+  if (!isValidLinkedInUrl(rawUrl)) {
+    const urlFromCells = keys
+      .map(k => sanitizeText(row[k]))
+      .find(v => v.includes('linkedin.com') || v.includes('linkedin.com/in/') || v.includes('linkedin.com/sales/') || v.startsWith('http'));
+    
+    if (urlFromCells) {
+      rawUrl = urlFromCells;
+    }
   }
 
-  if (linkedinUrl && !linkedinUrl.startsWith('http')) {
-    linkedinUrl = `https://${linkedinUrl.replace(/^\/\//, '')}`;
-  }
+  const linkedinUrl = normalizeLinkedInUrl(rawUrl);
 
   // 5. Email Detection
   const emailKey = findKey(['email', 'mail', 'emailaddress', 'contactemail']);
@@ -271,7 +325,6 @@ export function parseCSVFile(file) {
           }
         }
         
-        // Unconditional Fallback: Parse CSV without header mode
         Papa.parse(file, {
           header: false,
           skipEmptyLines: 'greedy',
