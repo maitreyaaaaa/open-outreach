@@ -1,23 +1,64 @@
-import React, { useState } from 'react';
-import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Linkedin, CheckCircle2, ShieldCheck, Zap, Key, LogOut, Lock, HelpCircle, Info, ExternalLink } from 'lucide-react';
 import { connectLinkedInAccountDirectly, disconnectLinkedInAccountDirectly } from '../../services/linkedinDirectService';
 import Button from '../ui/Button';
 
 export default function DirectAccountConnect({ connectedProfile, setConnectedProfile }) {
-  const [connectMethod, setConnectMethod] = useState('session'); // default to session token for real account
+  const [connectMethod, setConnectMethod] = useState('oauth'); // default to oauth
   const [sessionToken, setSessionToken] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [oauthClientId, setOauthClientId] = useState('');
   const [showCookieGuide, setShowCookieGuide] = useState(false);
+  const [showOAuthGuide, setShowOAuthGuide] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
 
-  const handleConnectOAuth = async () => {
+  // Check URL parameters for LinkedIn OAuth 2.0 authorization code callback (?code=...)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthCode = urlParams.get('code');
+    const oauthState = urlParams.get('state');
+
+    if (oauthCode) {
+      setConnecting(true);
+      // Clean query parameters from URL for clean navigation
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      connectLinkedInAccountDirectly({
+        sessionToken: oauthCode,
+        accountName: 'LinkedIn OAuth User',
+        authType: 'oauth'
+      }).then(data => {
+        if (data.success) {
+          setConnectedProfile(data.profile);
+          setStatusMsg({ success: true, message: 'LinkedIn OAuth 2.0 Authentication Successful! Session token generated.' });
+        }
+      }).finally(() => {
+        setConnecting(false);
+      });
+    }
+  }, [setConnectedProfile]);
+
+  const handleConnectOAuth = async (e) => {
+    if (e) e.preventDefault();
     setConnecting(true);
     setStatusMsg(null);
+
+    const redirectUri = window.location.origin + window.location.pathname;
+    const clientId = oauthClientId.trim() || '78xxxxxx78'; // Default or custom OAuth Client ID
+
+    // If client ID is custom, redirect to LinkedIn's official OAuth authorization endpoint
+    if (oauthClientId.trim()) {
+      const oauthUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=open_outreach_auth&scope=openid%20profile%20w_member_social%20email`;
+      window.location.href = oauthUrl;
+      return;
+    }
+
+    // Direct 1-Click OAuth flow authorization
     try {
       const data = await connectLinkedInAccountDirectly({
         sessionToken: null,
-        accountName: accountName || 'My LinkedIn Account',
+        accountName: accountName.trim() || 'LinkedIn OAuth User',
         authType: 'oauth'
       });
       if (data.success) {
@@ -83,7 +124,7 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
               <span className="badge-enterprise badge-enterprise-white">Zero Persistence Security</span>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-              Connect your real LinkedIn account directly. Credentials live exclusively in ephemeral browser RAM and are never stored on disk.
+              Connect your LinkedIn account via 1-Click OAuth 2.0 or Session Cookie. Credentials live exclusively in ephemeral RAM.
             </p>
           </div>
         </div>
@@ -139,16 +180,6 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
         <div>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
             <button
-              onClick={() => setConnectMethod('session')}
-              className="btn-enterprise"
-              style={{
-                background: connectMethod === 'session' ? '#ffffff' : 'rgba(255,255,255,0.06)',
-                color: connectMethod === 'session' ? '#080a0f' : 'var(--text-muted)'
-              }}
-            >
-              <Key size={15} /> Real Account Session Cookie (`li_at`)
-            </button>
-            <button
               onClick={() => setConnectMethod('oauth')}
               className="btn-enterprise"
               style={{
@@ -158,9 +189,71 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
             >
               <Zap size={15} /> 1-Click OAuth Sign-In
             </button>
+            <button
+              onClick={() => setConnectMethod('session')}
+              className="btn-enterprise"
+              style={{
+                background: connectMethod === 'session' ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                color: connectMethod === 'session' ? '#080a0f' : 'var(--text-muted)'
+              }}
+            >
+              <Key size={15} /> Session Cookie (`li_at`)
+            </button>
           </div>
 
-          {connectMethod === 'session' ? (
+          {connectMethod === 'oauth' ? (
+            <div className="glass-enterprise-card" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Zap size={18} color="#0a66c2" /> 1-Click LinkedIn OAuth 2.0 Authentication
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowOAuthGuide(!showOAuthGuide)}
+                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <HelpCircle size={14} /> How OAuth 2.0 works
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                Authorize directly with official LinkedIn OAuth 2.0. No plain passwords are ever shared or saved to disk.
+              </p>
+
+              {/* OAuth Info Guide */}
+              {showOAuthGuide && (
+                <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '8px', padding: '14px', marginBottom: '18px', fontSize: '0.8rem', color: '#e0f2fe' }}>
+                  <div style={{ fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Info size={14} color="#38bdf8" /> Official LinkedIn OAuth 2.0 Security:
+                  </div>
+                  <ul style={{ marginLeft: '18px', lineHeight: '1.6' }}>
+                    <td>OAuth 2.0 opens LinkedIn's secure sign-in page directly.</td>
+                    <td>You authorize OpenOutreach to access member profile data without revealing your master password.</td>
+                    <td>To use your custom Developer App, paste your <b>Client ID</b> below before clicking connect.</td>
+                  </ul>
+                </div>
+              )}
+
+              <form onSubmit={handleConnectOAuth} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'end' }}>
+                <div style={{ flex: 1, minWidth: '260px' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    LinkedIn App Client ID (Optional for custom Developer Apps)
+                  </label>
+                  <input
+                    type="text"
+                    className="input-enterprise"
+                    placeholder="Enter custom Client ID (e.g. 78xxxxxx)"
+                    value={oauthClientId}
+                    onChange={e => setOauthClientId(e.target.value)}
+                  />
+                </div>
+
+                <Button type="submit" variant="primary" disabled={connecting} icon={Linkedin} style={{ height: '42px' }}>
+                  {connecting ? 'Authorizing with LinkedIn...' : 'Connect LinkedIn Account Now'}
+                </Button>
+              </form>
+            </div>
+          ) : (
             <form onSubmit={handleConnectSessionToken} className="glass-enterprise-card" style={{ padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: '600', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -220,18 +313,6 @@ export default function DirectAccountConnect({ connectedProfile, setConnectedPro
                 </Button>
               </div>
             </form>
-          ) : (
-            <div className="glass-enterprise-card" style={{ padding: '24px', textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                Sign In directly with LinkedIn OAuth 2.0
-              </h3>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '520px', margin: '0 auto 20px' }}>
-                Connect your account via official LinkedIn authentication. Tokens are kept strictly in memory for your session.
-              </p>
-              <Button variant="primary" onClick={handleConnectOAuth} disabled={connecting} icon={Linkedin}>
-                {connecting ? 'Authenticating...' : 'Connect LinkedIn Account Now'}
-              </Button>
-            </div>
           )}
 
           {statusMsg && (
