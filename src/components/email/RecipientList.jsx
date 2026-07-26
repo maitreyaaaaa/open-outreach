@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, Building2, ShieldCheck, Check } from 'lucide-react';
 import { parseAnyFile, generateDemoCompanies } from '../../utils/csvParser';
 
-export default function RecipientList({ recipients, setRecipients, onNext }) {
+export default function RecipientList({ recipients, setRecipients, onNext, initialShowAddModal = false }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [errorMsg, setErrorMsg] = useState(null);
 
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(initialShowAddModal);
   const [newCompany, setNewCompany] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');

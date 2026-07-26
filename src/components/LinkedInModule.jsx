@@ -6,7 +6,7 @@ import ProfileList from './linkedin/ProfileList';
 import NoteComposer from './linkedin/NoteComposer';
 import ModalInspector from './linkedin/ModalInspector';
 import PlaywrightRunner from './linkedin/PlaywrightRunner';
-import { generateDemoLinkedInProfiles, parseCSVFile } from '../utils/csvParser';
+import { generateDemoLinkedInProfiles, parseAnyFile } from '../utils/csvParser';
 import { animateCardStagger } from '../utils/animationEngine';
 
 export default function LinkedInModule({
@@ -16,7 +16,8 @@ export default function LinkedInModule({
   setTemplate
 }) {
   const [subTab, setSubTab] = useState('recipients');
-  const [connectedProfile, setConnectedProfile] = useState(null); // Starts un-connected for security
+  const [connectedProfile, setConnectedProfile] = useState(null);
+  const [showAddSingleModal, setShowAddSingleModal] = useState(false);
 
   useEffect(() => {
     animateCardStagger('.glass-enterprise-card, .glass-enterprise-panel');
@@ -33,8 +34,9 @@ export default function LinkedInModule({
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const parsed = await parseCSVFile(file);
+      const parsed = await parseAnyFile(file);
       setRecipients(parsed);
+      setShowAddSingleModal(false);
     } catch (err) {
       alert(err.message || 'File import failed.');
     }
@@ -56,21 +58,26 @@ export default function LinkedInModule({
         onStepClick={(stepId) => setSubTab(stepId)}
       />
 
-      {recipients.length === 0 && subTab === 'recipients' ? (
+      {recipients.length === 0 && !showAddSingleModal && subTab === 'recipients' ? (
         <EmptyState
           title="No LinkedIn Profiles Loaded"
-          description="Your target LinkedIn profiles list is currently empty. Load demo data or import a CSV file to set up automated connection requests."
+          description="Your target LinkedIn profiles list is currently empty. Load demo data, import a CSV/Excel file, or add a single profile manually."
           channel="LinkedIn"
           onLoadDemo={() => setRecipients(generateDemoLinkedInProfiles())}
           onImport={handleFileUpload}
+          onAddSingle={() => setShowAddSingleModal(true)}
         />
       ) : (
         <>
           {subTab === 'recipients' && (
             <ProfileList
               recipients={recipients}
-              setRecipients={setRecipients}
+              setRecipients={(newRecs) => {
+                setRecipients(newRecs);
+                if (newRecs.length === 0) setShowAddSingleModal(false);
+              }}
               onNext={() => setSubTab('template')}
+              initialShowAddModal={showAddSingleModal}
             />
           )}
 

@@ -20,6 +20,7 @@ export default function EmailModule({
   setIsSmtpConnected
 }) {
   const [subTab, setSubTab] = useState('recipients');
+  const [showAddSingleModal, setShowAddSingleModal] = useState(false);
 
   useEffect(() => {
     animateCardStagger('.glass-enterprise-card, .glass-enterprise-panel');
@@ -43,6 +44,7 @@ export default function EmailModule({
     try {
       const parsed = await parseAnyFile(file);
       setRecipients(parsed);
+      setShowAddSingleModal(false);
     } catch (err) {
       alert(err.message || 'File import failed.');
     }
@@ -58,21 +60,26 @@ export default function EmailModule({
         onStepClick={(stepId) => setSubTab(stepId)}
       />
 
-      {recipients.length === 0 && subTab === 'recipients' ? (
+      {recipients.length === 0 && !showAddSingleModal && subTab === 'recipients' ? (
         <EmptyState
           title="No Email Recipients Loaded"
-          description="Your email target directory is currently empty. Load demo data or import a CSV/Excel file to prepare your enterprise email campaign."
+          description="Your email target directory is currently empty. Load demo data, import a CSV/Excel file, or add a single entry manually."
           channel="Email"
           onLoadDemo={() => setRecipients(generateDemoCompanies())}
           onImport={handleFileUpload}
+          onAddSingle={() => setShowAddSingleModal(true)}
         />
       ) : (
         <>
           {subTab === 'recipients' && (
             <RecipientList
               recipients={recipients}
-              setRecipients={setRecipients}
+              setRecipients={(newRecs) => {
+                setRecipients(newRecs);
+                if (newRecs.length === 0) setShowAddSingleModal(false);
+              }}
               onNext={() => setSubTab('template')}
+              initialShowAddModal={showAddSingleModal}
             />
           )}
 

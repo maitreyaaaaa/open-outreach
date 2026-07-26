@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, ExternalLink } from 'lucide-react';
 import { parseAnyFile, generateDemoLinkedInProfiles, isValidLinkedInUrl } from '../../utils/csvParser';
 
-export default function ProfileList({ recipients, setRecipients, onNext }) {
+export default function ProfileList({ recipients, setRecipients, onNext, initialShowAddModal = false }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [errorMsg, setErrorMsg] = useState(null);
 
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(initialShowAddModal);
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newCompany, setNewCompany] = useState('');
