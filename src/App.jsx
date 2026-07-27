@@ -7,12 +7,20 @@ import WhatsAppModule from './components/WhatsAppModule';
 import IntegrationHub from './components/IntegrationHub';
 import PluginSpace from './components/PluginSpace';
 import DiagnosticsModal from './components/ui/DiagnosticsModal';
+import SecurityVaultModal from './components/ui/SecurityVaultModal';
 import { generateDemoCompanies } from './utils/csvParser';
+import { getActiveTenantId } from './services/tenantSecurityService';
 
 export default function App() {
   const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin, whatsapp, plugins, integrations
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  
+  // Security Vault State
+  const [showVaultModal, setShowVaultModal] = useState(false);
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+  const [vaultSecrets, setVaultSecrets] = useState(null);
+  const [activeTenantId, setActiveTenantIdState] = useState(getActiveTenantId());
 
   // Email State
   const [emailRecipients, setEmailRecipients] = useState([]);
@@ -43,6 +51,16 @@ export default function App() {
     body: `Hi {{FirstName}}, noticed your work at {{Company}} as {{Role}}. I’m also in this space and would love to connect and follow your updates!`
   });
 
+  const handleVaultUnlocked = (secrets) => {
+    setIsVaultUnlocked(true);
+    setVaultSecrets(secrets);
+  };
+
+  const handleVaultLocked = () => {
+    setIsVaultUnlocked(false);
+    setVaultSecrets(null);
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#080a0f', color: '#ffffff' }}>
       
@@ -55,6 +73,10 @@ export default function App() {
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
         onOpenDiagnostics={() => setShowDiagnostics(true)}
+        onOpenVaultModal={() => setShowVaultModal(true)}
+        isVaultUnlocked={isVaultUnlocked}
+        activeTenantId={activeTenantId}
+        setActiveTenantIdState={setActiveTenantIdState}
       />
 
       {/* Right Spacious Main Canvas */}
@@ -109,6 +131,15 @@ export default function App() {
       <DiagnosticsModal
         isOpen={showDiagnostics}
         onClose={() => setShowDiagnostics(false)}
+      />
+
+      {/* Security Vault Modal */}
+      <SecurityVaultModal
+        isOpen={showVaultModal}
+        onClose={() => setShowVaultModal(false)}
+        onVaultUnlocked={handleVaultUnlocked}
+        onVaultLocked={handleVaultLocked}
+        isUnlocked={isVaultUnlocked}
       />
 
     </div>

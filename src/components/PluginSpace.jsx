@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Puzzle, CheckCircle, ExternalLink, Key, Plus, Trash2, Zap, Shield, Mail, Linkedin, MessageSquare, Github, Slack, Database } from 'lucide-react';
+import { Puzzle, CheckCircle, ExternalLink, Key, Plus, Trash2, Zap, Shield, Mail, Linkedin, MessageSquare, Github, Slack, Database, Cpu } from 'lucide-react';
 import { logSystemEvent } from '../services/loggerService';
+import { executeLinkedInMcpTool } from '../services/linkedInMcpService';
 
 export default function PluginSpace() {
   const [composioApiKey, setComposioApiKey] = useState(() => {
@@ -10,6 +11,7 @@ export default function PluginSpace() {
   const [activePlugins, setActivePlugins] = useState({
     gmail: true,
     linkedin: true,
+    linkedin_mcp: true,
     whatsapp: true,
     github: false,
     hubspot: false,
@@ -18,6 +20,7 @@ export default function PluginSpace() {
 
   const [customWebhooks, setCustomWebhooks] = useState([]);
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [mcpTestResult, setMcpTestResult] = useState(null);
 
   const togglePlugin = (pluginId) => {
     const nextState = !activePlugins[pluginId];
@@ -34,6 +37,15 @@ export default function PluginSpace() {
     } catch (e) {}
   };
 
+  const handleTestLinkedInMcp = async () => {
+    try {
+      const res = await executeLinkedInMcpTool('linkedin_search_profile', { keyword: 'Venture Partner', company: 'Sequoia' });
+      setMcpTestResult({ success: true, message: `LinkedIn MCP tool test passed! Found ${res.profiles?.length} lead bindings.` });
+    } catch (err) {
+      setMcpTestResult({ success: false, message: err.message });
+    }
+  };
+
   const handleAddWebhook = (e) => {
     e.preventDefault();
     if (!newWebhookUrl) return;
@@ -42,6 +54,13 @@ export default function PluginSpace() {
   };
 
   const pluginsCatalog = [
+    {
+      id: 'linkedin_mcp',
+      name: 'LinkedIn Model Context Protocol (MCP) Server',
+      category: 'Model Context Protocol',
+      icon: Cpu,
+      desc: 'Native MCP bindings for search, 300-char connection invites, and thread history (felipfr/linkedin-mcpserver).'
+    },
     {
       id: 'gmail',
       name: 'Composio Gmail Action Plugin',
@@ -99,12 +118,12 @@ export default function PluginSpace() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#ffffff' }}>
-                  Plugin Space & Extension Marketplace
+                  Plugin Space & MCP Extensions
                 </h2>
-                <span className="badge-enterprise badge-enterprise-white">Composio Plugin Architecture</span>
+                <span className="badge-enterprise badge-enterprise-white">LinkedIn MCP Protocol</span>
               </div>
               <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Plug in Composio tools (`composio.dev`), AI agent skills, and custom webhook endpoints into OpenOutreach.
+                Plug in Composio tools (`composio.dev`), LinkedIn MCP Server bindings, and custom webhooks into OpenOutreach.
               </p>
             </div>
           </div>
@@ -145,10 +164,30 @@ export default function PluginSpace() {
         </form>
       </div>
 
+      {/* LinkedIn MCP Testing Panel */}
+      <div className="glass-enterprise-panel" style={{ padding: '24px', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff' }}>LinkedIn Model Context Protocol (MCP) Server Test</h4>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Verify Model Context Protocol tool bindings for profile search & invitation dispatches.</p>
+          </div>
+          <button onClick={handleTestLinkedInMcp} className="btn-enterprise btn-enterprise-secondary">
+            Test LinkedIn MCP Binding
+          </button>
+        </div>
+
+        {mcpTestResult && (
+          <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '6px', fontSize: '0.84rem', background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle size={16} color="#4ade80" />
+            {mcpTestResult.message}
+          </div>
+        )}
+      </div>
+
       {/* Plugins Catalog Grid */}
       <div style={{ marginBottom: '32px' }}>
         <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', marginBottom: '18px' }}>
-          Available Composio & Extension Plugins
+          Available MCP & Extension Plugins
         </h3>
 
         <div className="grid-enterprise grid-enterprise-3">
