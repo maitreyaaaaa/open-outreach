@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Eye, ChevronLeft, ChevronRight, Send, CheckCircle2, AlertCircle, Building2, Smartphone, Monitor, Sparkles, Shuffle } from 'lucide-react';
+import { Eye, ChevronLeft, ChevronRight, Send, CheckCircle2, AlertCircle, Building2, Smartphone, Monitor, Sparkles, Shuffle, Layers, RotateCcw } from 'lucide-react';
 import { renderTemplate, textToHtml } from '../../utils/templateEngine';
 
 export default function EmailPreviewer({ recipients, template, smtpConfig, isSmtpConnected, onNext }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState('desktop');
+  const [previewStage, setPreviewStage] = useState('initial'); // 'initial', 'followUp1', 'followUp2'
   const [highlightVars, setHighlightVars] = useState(true);
   const [testEmailAddr, setTestEmailAddr] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
@@ -15,15 +16,27 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
       <div style={{ textAlign: 'center', padding: '40px' }}>
         <div className="glass-enterprise-panel">
           <h3>No recipients loaded</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Please go back to the Directory tab and load your 198 companies list.</p>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Please go back to the Directory tab and load your targets list.</p>
         </div>
       </div>
     );
   }
 
   const currentRecord = recipients[currentIndex] || recipients[0];
-  const renderedSubject = renderTemplate(template.subject, currentRecord);
-  let renderedBodyText = renderTemplate(template.body, currentRecord);
+
+  let rawSubject = template.subject;
+  let rawBody = template.body;
+
+  if (previewStage === 'followUp1') {
+    rawSubject = template.followUp1?.subject || `Re: ${template.subject}`;
+    rawBody = template.followUp1?.body || `Hi {{ContactPerson}},\n\nFollowing up on my previous note regarding {{Company}}.\n\nBest regards,\nSarah`;
+  } else if (previewStage === 'followUp2') {
+    rawSubject = template.followUp2?.subject || `Final check-in: ${template.subject}`;
+    rawBody = template.followUp2?.body || `Hi {{ContactPerson}},\n\nOne final check-in regarding {{Company}}.\n\nBest regards,\nSarah`;
+  }
+
+  const renderedSubject = renderTemplate(rawSubject, currentRecord);
+  let renderedBodyText = renderTemplate(rawBody, currentRecord);
   let renderedBodyHtml = textToHtml(renderedBodyText);
 
   if (highlightVars && currentRecord) {
@@ -74,7 +87,7 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
           emailData: {
             to: testEmailAddr.trim(),
             fromName: smtpConfig.fromName,
-            subject: `[PREVIEW TEST #${currentIndex + 1}] ${renderedSubject}`,
+            subject: `[${previewStage.toUpperCase()} TEST #${currentIndex + 1}] ${renderedSubject}`,
             html: textToHtml(renderedBodyText),
             text: renderedBodyText
           }
@@ -113,6 +126,31 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Sequence Preview Stage Selector */}
+          <div style={{ display: 'flex', background: 'rgba(8, 10, 15, 0.6)', padding: '3px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+            <button
+              onClick={() => setPreviewStage('initial')}
+              className="btn-enterprise"
+              style={{ padding: '5px 10px', fontSize: '0.78rem', background: previewStage === 'initial' ? '#ffffff' : 'transparent', color: previewStage === 'initial' ? '#080a0f' : 'var(--text-muted)' }}
+            >
+              1. Initial
+            </button>
+            <button
+              onClick={() => setPreviewStage('followUp1')}
+              className="btn-enterprise"
+              style={{ padding: '5px 10px', fontSize: '0.78rem', background: previewStage === 'followUp1' ? '#ffffff' : 'transparent', color: previewStage === 'followUp1' ? '#080a0f' : 'var(--text-muted)' }}
+            >
+              2. Follow-Up #1
+            </button>
+            <button
+              onClick={() => setPreviewStage('followUp2')}
+              className="btn-enterprise"
+              style={{ padding: '5px 10px', fontSize: '0.78rem', background: previewStage === 'followUp2' ? '#ffffff' : 'transparent', color: previewStage === 'followUp2' ? '#080a0f' : 'var(--text-muted)' }}
+            >
+              3. Follow-Up #2
+            </button>
+          </div>
+
           <div style={{ display: 'flex', background: 'rgba(8, 10, 15, 0.6)', padding: '3px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
             <button
               onClick={() => setViewMode('desktop')}
@@ -179,9 +217,14 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
                   <strong style={{ color: '#ffffff' }}>{currentRecord.ContactPerson}</strong>
                   <span style={{ color: 'var(--text-dim)' }}>&lt;{currentRecord.Email}&gt;</span>
                 </div>
-                <span className="badge-enterprise">
-                  <Building2 size={12} /> {currentRecord.Company}
-                </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span className="badge-enterprise" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}>
+                    {previewStage === 'initial' ? 'Initial Email' : previewStage === 'followUp1' ? 'Follow-Up #1 Preview' : 'Follow-Up #2 Preview'}
+                  </span>
+                  <span className="badge-enterprise">
+                    <Building2 size={12} /> {currentRecord.Company}
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.92rem' }}>
@@ -198,7 +241,9 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
         ) : (
           <div className="mobile-frame-enterprise">
             <div style={{ background: '#080a0f', padding: '14px 16px', color: '#ffffff', fontSize: '0.8rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Mobile Inbox Preview</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                Mobile Inbox Preview • {previewStage === 'initial' ? 'Initial Email' : previewStage === 'followUp1' ? 'Follow-Up #1' : 'Follow-Up #2'}
+              </div>
               <strong style={{ display: 'block', fontSize: '0.88rem', color: '#ffffff' }}>{renderedSubject}</strong>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '2px' }}>To: {currentRecord.ContactPerson}</div>
             </div>
@@ -212,7 +257,7 @@ export default function EmailPreviewer({ recipients, template, smtpConfig, isSmt
       {/* Test Email */}
       <div className="glass-enterprise-card" style={{ padding: '20px 24px', marginBottom: '24px' }}>
         <h3 style={{ fontSize: '0.95rem', fontWeight: '700', marginBottom: '6px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Send size={16} color="#ffffff" /> Send Single Test to Personal Inbox
+          <Send size={16} color="#ffffff" /> Send Single Test to Personal Inbox ({previewStage.toUpperCase()})
         </h3>
         <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
           Verify email layout in your inbox client before starting campaign.

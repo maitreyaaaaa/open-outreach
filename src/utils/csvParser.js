@@ -112,9 +112,6 @@ export function generateDemoLinkedInProfiles() {
   return demoData;
 }
 
-/**
- * Checks magic bytes to detect binary files (.xlsx ZIP header PK 0x50 0x4B, .xls OLE2 0xD0 0xCF)
- */
 function isBinaryFile(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -142,9 +139,6 @@ function isBinaryFile(file) {
   });
 }
 
-/**
- * Robust LinkedIn URL Validator
- */
 export function isValidLinkedInUrl(url) {
   if (!url || typeof url !== 'string') return false;
   const cleaned = url.trim().toLowerCase();
@@ -156,9 +150,6 @@ export function isValidLinkedInUrl(url) {
   return isLinkedIn || isHttpUrl;
 }
 
-/**
- * Normalizes LinkedIn URL
- */
 export function normalizeLinkedInUrl(url) {
   if (!url || typeof url !== 'string') return '';
   let u = url.trim();
@@ -175,9 +166,6 @@ export function normalizeLinkedInUrl(url) {
   return u;
 }
 
-/**
- * Sanitizes text to strip binary artifacts and control characters
- */
 function sanitizeText(str) {
   if (!str) return '';
   let s = String(str);
@@ -186,9 +174,28 @@ function sanitizeText(str) {
   return s;
 }
 
-/**
- * Sort profiles so Valid LinkedIn URLs come FIRST (top), Invalid URLs come LAST (bottom)
- */
+function deriveCleanName(rawName, email) {
+  let name = sanitizeText(rawName || '');
+  
+  const isNoisy = name.length > 32 || name.includes(',') || /\d{4}-\d{2}-\d{2}/.test(name) || /partnership|marketing|communications|community|head|director|manager|vice president|lead/i.test(name);
+  
+  if (isNoisy || !name) {
+    if (email && email.includes('@')) {
+      const emailPrefix = email.split('@')[0];
+      const parts = emailPrefix.replace(/[0-9_.]+/g, ' ').trim().split(/\s+/);
+      if (parts.length > 0 && parts[0].length >= 2) {
+        const cleanParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+        return cleanParts.join(' ');
+      }
+    }
+    if (isNoisy) {
+      return 'Team Leader';
+    }
+  }
+
+  return name || 'Contact Person';
+}
+
 export function sortProfilesValidFirst(profiles) {
   return [...profiles].sort((a, b) => {
     const aValid = isValidLinkedInUrl(a.LinkedInUrl);
@@ -199,9 +206,6 @@ export function sortProfilesValidFirst(profiles) {
   });
 }
 
-/**
- * Universal Intelligent File Parser
- */
 export async function parseAnyFile(file) {
   const fileName = file.name.toLowerCase();
   const isExcelExt = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('sheet') || file.type.includes('excel');
@@ -225,9 +229,6 @@ export async function parseAnyFile(file) {
   return sorted;
 }
 
-/**
- * Smart Column Mapper for Raw Scraped Objects
- */
 function normalizeRowData(row, index) {
   if (!row || typeof row !== 'object') return null;
 
@@ -270,7 +271,15 @@ function normalizeRowData(row, index) {
     rawName = textVal || '';
   }
 
-  const name = sanitizeText(rawName) || `Contact #${index + 1}`;
+  // 5. Email Detection
+  const emailKey = findKey(['email', 'mail', 'emailaddress', 'contactemail']);
+  let email = emailKey && row[emailKey] ? sanitizeText(row[emailKey]) : '';
+  if (!email) {
+    const emailVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('@') && v.includes('.'));
+    email = emailVal || '';
+  }
+
+  const name = deriveCleanName(rawName, email);
 
   // 2. Role Detection
   const roleKey = findKey(['role', 'title', 'jobtitle', 'position', 'headline', 'occupation', 'designation', 'investortype', 'type', 'category']);
@@ -308,14 +317,6 @@ function normalizeRowData(row, index) {
 
   const linkedinUrl = normalizeLinkedInUrl(rawUrl);
 
-  // 5. Email Detection
-  const emailKey = findKey(['email', 'mail', 'emailaddress', 'contactemail']);
-  let email = emailKey && row[emailKey] ? sanitizeText(row[emailKey]) : '';
-  if (!email) {
-    const emailVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('@') && v.includes('.'));
-    email = emailVal || '';
-  }
-
   // 6. Custom Note Generation
   const noteKey = findKey(['customnote', 'note', 'message', 'intro']);
   const customNote = noteKey && row[noteKey] ? sanitizeText(row[noteKey]) : '';
@@ -331,7 +332,6 @@ function normalizeRowData(row, index) {
   let initialStatus = 'Pending';
   let initialSentAt = null;
 
-  // A. Check CSV column value
   if (statusVal) {
     const sLower = statusVal.toLowerCase();
     if (sLower.includes('follow-up #2') || sLower.includes('followup 2')) {
@@ -343,7 +343,6 @@ function normalizeRowData(row, index) {
     }
   }
 
-  // B. Check localStorage sent history match
   if (cleanEmail && historyMap[cleanEmail]) {
     initialStatus = historyMap[cleanEmail].status || 'Step 1 Sent';
     initialSentAt = historyMap[cleanEmail].sentAt || null;
