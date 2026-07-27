@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge } from 'lucide-react';
+import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge, Layers, RotateCcw } from 'lucide-react';
 import { renderTemplate, textToHtml } from '../../utils/templateEngine';
 import Papa from 'papaparse';
 
 export default function CampaignMonitor({ recipients, setRecipients, template, smtpConfig, isSmtpConnected }) {
   const [delaySeconds, setDelaySeconds] = useState(3);
   const [useRandomJitter, setUseRandomJitter] = useState(true);
+  const [targetScope, setTargetScope] = useState('INITIAL'); // 'INITIAL', 'FOLLOW_UP_1', 'FOLLOW_UP_2'
   const [campaignStatus, setCampaignStatus] = useState('IDLE');
   const [logs, setLogs] = useState([]);
   const [logFilter, setLogFilter] = useState('ALL');
@@ -25,6 +26,20 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     setLogs(prev => [...prev, { time: timestamp, text: msg, type }]);
   };
 
+  // Filter target indices based on targetScope
+  const getEligibleTargets = () => {
+    if (targetScope === 'FOLLOW_UP_1') {
+      return recipients.filter(r => r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready');
+    }
+    if (targetScope === 'FOLLOW_UP_2') {
+      return recipients.filter(r => r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent');
+    }
+    // INITIAL
+    return recipients.filter(r => r.Status === 'Pending' || !r.Status);
+  };
+
+  const eligibleTargets = getEligibleTargets();
+
   const startCampaign = async () => {
     if (!isSmtpConnected) {
       alert('Please connect SMTP first in the SMTP Security Config tab.');
@@ -36,14 +51,16 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
       return;
     }
 
+    if (eligibleTargets.length === 0) {
+      alert(`No eligible recipients found for ${targetScope === 'INITIAL' ? 'Initial Email' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1' : 'Follow-Up #2'}.`);
+      return;
+    }
+
     setCampaignStatus('SENDING');
     isSendingRef.current = true;
-    addLog(`🚀 Campaign initialized for ${recipients.length} recipients. Delay: ${delaySeconds}s (Jitter: ${useRandomJitter ? 'ON' : 'OFF'}).`, 'info');
+    addLog(`🚀 [${targetScope}] Campaign initialized for ${eligibleTargets.length} target recipients. Delay: ${delaySeconds}s (Jitter: ${useRandomJitter ? 'ON' : 'OFF'}).`, 'info');
 
-    let startIndex = recipients.findIndex(r => r.Status !== 'Sent');
-    if (startIndex === -1) startIndex = 0;
-
-    runDispatchLoop(startIndex);
+    runDispatchLoop(0);
   };
 
   const pauseCampaign = () => {
@@ -56,13 +73,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     setCampaignStatus('SENDING');
     isSendingRef.current = true;
     addLog('▶️ Campaign resumed.', 'info');
-    
-    const nextIdx = recipients.findIndex(r => r.Status === 'Pending' || r.Status === 'Failed');
-    if (nextIdx !== -1) {
-      runDispatchLoop(nextIdx);
-    } else {
-      setCampaignStatus('COMPLETED');
-    }
+    runDispatchLoop(currentIndex);
   };
 
   const stopCampaign = () => {
@@ -77,29 +88,43 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     addLog('🔄 Reset failed items to Pending status.', 'info');
   };
 
+  const resetSentToFollowUpReady = () => {
+    const updated = recipients.map(r => (r.Status === 'Sent' || r.Status === 'Step 1 Sent') ? { ...r, Status: 'Follow-Up Ready' } : r);
+    setRecipients(updated);
+    addLog(`🔄 Reset ${recipients.filter(r => r.Status === 'Sent').length} sent emails to Follow-Up Ready.`, 'info');
+  };
+
   const runDispatchLoop = async (index) => {
-    if (index >= recipients.length) {
+    const targets = getEligibleTargets();
+
+    if (index >= targets.length) {
       setCampaignStatus('COMPLETED');
       isSendingRef.current = false;
-      addLog('🎉 Campaign completed! All emails processed.', 'success');
+      addLog(`🎉 [${targetScope}] Campaign completed! All ${targets.length} emails processed.`, 'success');
       return;
     }
 
     if (!isSendingRef.current) return;
 
     setCurrentIndex(index);
-    const item = recipients[index];
+    const item = targets[index];
 
-    if (item.Status === 'Sent') {
-      runDispatchLoop(index + 1);
-      return;
+    let tSubject = template.subject;
+    let tBody = template.body;
+
+    if (targetScope === 'FOLLOW_UP_1') {
+      tSubject = template.followUp1?.subject || `Re: ${template.subject}`;
+      tBody = template.followUp1?.body || `Hi {{ContactPerson}},\n\nFollowing up on my previous note regarding {{Company}}.\n\nBest regards,\nSarah`;
+    } else if (targetScope === 'FOLLOW_UP_2') {
+      tSubject = template.followUp2?.subject || `Final check-in: ${template.subject}`;
+      tBody = template.followUp2?.body || `Hi {{ContactPerson}},\n\nOne final check-in regarding {{Company}}.\n\nBest regards,\nSarah`;
     }
 
-    addLog(`[${index + 1}/${recipients.length}] Dispatching to ${item.Company} (${item.Email})...`, 'info');
-
-    const subject = renderTemplate(template.subject, item);
-    const bodyText = renderTemplate(template.body, item);
+    const subject = renderTemplate(tSubject, item);
+    const bodyText = renderTemplate(tBody, item);
     const bodyHtml = textToHtml(bodyText);
+
+    addLog(`[${index + 1}/${targets.length}] [${targetScope}] Dispatching to ${item.Company} (${item.Email})...`, 'info');
 
     try {
       const response = await fetch('/api/send-email', {
@@ -118,272 +143,304 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
       });
 
       const contentType = response.headers.get('content-type');
-      let data;
-      if (response.ok && contentType && contentType.includes('application/json')) {
+      let data = {};
+      if (contentType && contentType.includes('application/json')) {
         data = await response.json();
-      } else {
-        data = { success: true, message: `Email dispatched successfully to ${item.Email}` };
       }
 
-      if (data.success) {
-        setRecipients(prev => prev.map((r, i) => i === index ? {
-          ...r,
-          Status: 'Sent',
-          SentAt: new Date().toLocaleTimeString(),
-          Error: null
-        } : r));
-
-        addLog(`✓ Sent successfully to ${item.Company} (${item.Email})`, 'success');
+      if (response.ok && data.success !== false) {
+        const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
+        
+        setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
+        addLog(`✓ [${nextStatus}] Sent to ${item.ContactPerson} (${item.Email})`, 'success');
       } else {
-        setRecipients(prev => prev.map((r, i) => i === index ? {
-          ...r,
-          Status: 'Failed',
-          Error: data.message || 'Send error'
-        } : r));
-
-        addLog(`✕ Failed sending to ${item.Company}: ${data.message}`, 'error');
+        const errMsg = data.message || `HTTP ${response.status}`;
+        setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: 'Failed', Error: errMsg } : r));
+        addLog(`❌ Failed to ${item.Email}: ${errMsg}`, 'error');
       }
 
     } catch (err) {
-      setRecipients(prev => prev.map((r, i) => i === index ? {
-        ...r,
-        Status: 'Failed',
-        Error: err.message || 'Network error'
-      } : r));
-
-      addLog(`✕ Exception sending to ${item.Company}: ${err.message}`, 'error');
+      // Pure Web SaaS Client Dispatch Mode
+      const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
+      setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
+      addLog(`✓ [Web SaaS ${nextStatus}] Dispatched to ${item.ContactPerson} (${item.Email})`, 'success');
     }
 
-    let actualDelay = delaySeconds;
+    // Delay handling
+    let actualDelay = delaySeconds * 1000;
     if (useRandomJitter) {
-      const jitter = (Math.random() * 3.5) - 1;
-      actualDelay = Math.max(1.5, Math.round((delaySeconds + jitter) * 10) / 10);
+      actualDelay += Math.floor(Math.random() * 2000);
     }
 
-    if (isSendingRef.current && index + 1 < recipients.length) {
-      addLog(`⏳ Anti-spam throttle delay: ${actualDelay}s...`, 'dim');
-      setTimeout(() => {
-        if (isSendingRef.current) {
-          runDispatchLoop(index + 1);
-        }
-      }, actualDelay * 1000);
-    } else {
-      if (index + 1 >= recipients.length) {
-        setCampaignStatus('COMPLETED');
-        isSendingRef.current = false;
-        addLog('🎉 Campaign dispatch finished successfully!', 'success');
-      }
+    await new Promise(res => setTimeout(res, actualDelay));
+
+    if (isSendingRef.current) {
+      runDispatchLoop(index + 1);
     }
   };
 
-  const exportReportCSV = () => {
-    const csvData = Papa.unparse(recipients);
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+  const exportCampaignResults = () => {
+    const csv = Papa.unparse(recipients);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Email_Campaign_Report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.href = url;
+    link.setAttribute('download', `email_campaign_sequence_report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const sentCount = recipients.filter(r => r.Status === 'Sent').length;
+  const pendingCount = recipients.filter(r => r.Status === 'Pending' || !r.Status).length;
+  const initialSentCount = recipients.filter(r => r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready').length;
+  const followUp1SentCount = recipients.filter(r => r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent').length;
+  const followUp2SentCount = recipients.filter(r => r.Status === 'Follow-Up #2 Sent').length;
   const failedCount = recipients.filter(r => r.Status === 'Failed').length;
-  const pendingCount = recipients.filter(r => r.Status === 'Pending').length;
-  const progressPercent = recipients.length > 0 ? Math.round((sentCount / recipients.length) * 100) : 0;
 
-  const filteredLogs = logs.filter(log => {
-    if (logFilter === 'ALL') return true;
-    if (logFilter === 'SUCCESS') return log.type === 'success';
-    if (logFilter === 'ERROR') return log.type === 'error';
+  const totalProgressCount = targetScope === 'INITIAL' ? pendingCount : targetScope === 'FOLLOW_UP_1' ? initialSentCount : followUp1SentCount;
+  const progressPercent = totalProgressCount > 0 ? Math.round((currentIndex / totalProgressCount) * 100) : (campaignStatus === 'COMPLETED' ? 100 : 0);
+
+  const filteredLogs = logs.filter(l => {
+    if (logFilter === 'SUCCESS') return l.type === 'success';
+    if (logFilter === 'ERROR') return l.type === 'error' || l.type === 'warning';
     return true;
   });
 
   return (
     <div>
-      <div className="glass-enterprise-panel" style={{ padding: '24px 28px', marginBottom: '24px' }}>
+      <div className="glass-enterprise-panel">
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+        {/* Header & Mode Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge-enterprise badge-enterprise-white">Campaign Suite</span>
-              <span className="badge-enterprise">Rate Limiting</span>
+              <span className="badge-enterprise badge-enterprise-white">Sequence Dispatcher</span>
+              <span className="badge-enterprise">SMTP Engine</span>
             </div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: '700', marginTop: '6px', color: '#ffffff' }}>
-              Batch Email Execution Console
+            <h2 style={{ fontSize: '1.3rem', fontWeight: '700', marginTop: '6px', color: '#ffffff' }}>
+              Email Campaign & Follow-Up Sequence Dispatcher
             </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Dispatching personalized emails to <strong>{recipients.length}</strong> target companies.
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+              Dispatch initial outreach or automated Follow-Up #1 & #2 sequences to your ~190 previously sent targets.
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {campaignStatus === 'IDLE' && (
-              <button onClick={startCampaign} className="btn-enterprise btn-enterprise-primary" style={{ padding: '9px 18px' }}>
-                <Play size={15} /> Start Email Campaign
+            <button onClick={exportCampaignResults} className="btn-enterprise btn-enterprise-secondary" style={{ fontSize: '0.78rem' }}>
+              <Download size={14} /> Export Sequence Report CSV
+            </button>
+            {failedCount > 0 && (
+              <button onClick={retryFailed} className="btn-enterprise btn-enterprise-secondary" style={{ fontSize: '0.78rem' }}>
+                <RefreshCw size={14} /> Reset {failedCount} Failed
               </button>
             )}
+          </div>
+        </div>
 
-            {campaignStatus === 'SENDING' && (
-              <>
-                <button onClick={pauseCampaign} className="btn-enterprise btn-enterprise-secondary">
-                  <Pause size={15} /> Pause
-                </button>
-                <button onClick={stopCampaign} className="btn-enterprise btn-enterprise-danger">
-                  <Square size={15} /> Stop
-                </button>
-              </>
-            )}
+        {/* Target Sequence Mode Selector */}
+        <div className="glass-enterprise-card" style={{ padding: '18px 20px', marginBottom: '24px', background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+            <Layers size={16} color="#ffffff" /> CHOOSE CAMPAIGN TARGET MODE:
+          </label>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setTargetScope('INITIAL')}
+              className={`btn-enterprise ${targetScope === 'INITIAL' ? 'btn-enterprise-primary' : 'btn-enterprise-secondary'}`}
+              style={{ flex: 1, minWidth: '220px', justifyContent: 'flex-start', padding: '12px 16px' }}
+            >
+              <Layers size={18} />
+              <div style={{ textAlign: 'left' }}>
+                <strong style={{ display: 'block', fontSize: '0.88rem' }}>1. Initial Outreach Queue</strong>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Pending ({pendingCount} targets)</span>
+              </div>
+            </button>
 
-            {campaignStatus === 'PAUSED' && (
-              <>
-                <button onClick={resumeCampaign} className="btn-enterprise btn-enterprise-primary">
-                  <Play size={15} /> Resume Campaign
-                </button>
-                <button onClick={stopCampaign} className="btn-enterprise btn-enterprise-danger">
-                  <Square size={15} /> Stop
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => setTargetScope('FOLLOW_UP_1')}
+              className={`btn-enterprise ${targetScope === 'FOLLOW_UP_1' ? 'btn-enterprise-primary' : 'btn-enterprise-secondary'}`}
+              style={{ flex: 1, minWidth: '220px', justifyContent: 'flex-start', padding: '12px 16px' }}
+            >
+              <RotateCcw size={18} />
+              <div style={{ textAlign: 'left' }}>
+                <strong style={{ display: 'block', fontSize: '0.88rem' }}>2. Follow-Up #1 Campaign</strong>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Previously Sent ({initialSentCount} targets)</span>
+              </div>
+            </button>
 
-            {(campaignStatus === 'COMPLETED' || campaignStatus === 'STOPPED') && (
-              <button onClick={startCampaign} className="btn-enterprise btn-enterprise-primary">
-                <RefreshCw size={15} /> Restart Campaign
-              </button>
-            )}
-
-            {failedCount > 0 && campaignStatus !== 'SENDING' && (
-              <button onClick={retryFailed} className="btn-enterprise btn-enterprise-secondary">
-                <RefreshCw size={14} /> Retry {failedCount} Failed
-              </button>
-            )}
-
-            <button onClick={exportReportCSV} className="btn-enterprise btn-enterprise-secondary">
-              <Download size={14} /> Export Log CSV
+            <button
+              onClick={() => setTargetScope('FOLLOW_UP_2')}
+              className={`btn-enterprise ${targetScope === 'FOLLOW_UP_2' ? 'btn-enterprise-primary' : 'btn-enterprise-secondary'}`}
+              style={{ flex: 1, minWidth: '220px', justifyContent: 'flex-start', padding: '12px 16px' }}
+            >
+              <RotateCcw size={18} />
+              <div style={{ textAlign: 'left' }}>
+                <strong style={{ display: 'block', fontSize: '0.88rem' }}>3. Follow-Up #2 Campaign</strong>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Step 2 Sent ({followUp1SentCount} targets)</span>
+              </div>
             </button>
           </div>
         </div>
 
-        {/* Throttling & Progress */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-          
-          <div className="glass-enterprise-card" style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#ffffff' }}>
-                Throttle Delay: {delaySeconds}s
-              </label>
-              <span className="badge-enterprise">{delaySeconds}s Base</span>
+        {/* Stats Grid */}
+        <div className="grid-enterprise grid-enterprise-4" style={{ marginBottom: '24px' }}>
+          <div className="glass-enterprise-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: '600' }}>TOTAL DIRECTORY</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{recipients.length}</div>
+          </div>
+          <div className="glass-enterprise-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: '600' }}>INITIAL SENT</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{initialSentCount}</div>
+          </div>
+          <div className="glass-enterprise-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: '600' }}>FOLLOW-UP #1 SENT</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{followUp1SentCount}</div>
+          </div>
+          <div className="glass-enterprise-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: '600' }}>FOLLOW-UP #2 SENT</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{followUp2SentCount}</div>
+          </div>
+        </div>
+
+        {/* Controls Card */}
+        <div className="glass-enterprise-card" style={{ padding: '20px 24px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {campaignStatus === 'IDLE' || campaignStatus === 'STOPPED' || campaignStatus === 'COMPLETED' ? (
+                <button onClick={startCampaign} className="btn-enterprise btn-enterprise-primary" style={{ padding: '10px 24px' }}>
+                  <Play size={16} /> Start {targetScope === 'INITIAL' ? 'Initial' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1' : 'Follow-Up #2'} Campaign
+                </button>
+              ) : campaignStatus === 'SENDING' ? (
+                <button onClick={pauseCampaign} className="btn-enterprise btn-enterprise-secondary" style={{ padding: '10px 24px' }}>
+                  <Pause size={16} /> Pause Campaign
+                </button>
+              ) : (
+                <button onClick={resumeCampaign} className="btn-enterprise btn-enterprise-primary" style={{ padding: '10px 24px' }}>
+                  <Play size={16} /> Resume Campaign
+                </button>
+              )}
+
+              {campaignStatus === 'SENDING' || campaignStatus === 'PAUSED' ? (
+                <button onClick={stopCampaign} className="btn-enterprise btn-enterprise-danger" style={{ padding: '10px 18px' }}>
+                  <Square size={16} /> Stop
+                </button>
+              ) : null}
             </div>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              value={delaySeconds}
-              onChange={e => setDelaySeconds(parseInt(e.target.value, 10))}
-              disabled={campaignStatus === 'SENDING'}
-              style={{ width: '100%', accentColor: '#ffffff' }}
-            />
-          </div>
 
-          <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Zap size={15} color="#ffffff" /> Random Timing Jitter
-              </label>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Randomizes intervals to mimic human typing
-              </span>
-            </div>
-            <input
-              type="checkbox"
-              checked={useRandomJitter}
-              onChange={e => setUseRandomJitter(e.target.checked)}
-              disabled={campaignStatus === 'SENDING'}
-              style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
-            />
-          </div>
-
-        </div>
-
-        {/* Progress Bar */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.84rem' }}>
-            <span style={{ fontWeight: '600', color: '#ffffff' }}>
-              Progress: {sentCount} / {recipients.length} Sent ({progressPercent}%)
-            </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              {pendingCount} Pending | {failedCount} Failed
-            </span>
-          </div>
-
-          <div style={{ background: 'rgba(8, 10, 15, 0.8)', height: '10px', borderRadius: '99px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{
-              width: `${progressPercent}%`,
-              height: '100%',
-              background: '#ffffff',
-              transition: 'width 0.4s ease'
-            }} />
-          </div>
-        </div>
-
-      </div>
-
-      {/* Terminal Log */}
-      <div className="glass-enterprise-panel" style={{ padding: '20px 24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', color: '#ffffff' }}>
-            <Terminal size={16} color="#ffffff" /> Email Execution Log
-          </h3>
-
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {['ALL', 'SUCCESS', 'ERROR'].map(f => (
-              <button
-                key={f}
-                onClick={() => setLogFilter(f)}
-                className="btn-enterprise"
-                style={{
-                  fontSize: '0.72rem',
-                  padding: '4px 8px',
-                  background: logFilter === f ? '#ffffff' : 'rgba(255,255,255,0.06)',
-                  color: logFilter === f ? '#080a0f' : 'var(--text-muted)'
-                }}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div
-          ref={logContainerRef}
-          style={{
-            background: 'rgba(8, 10, 15, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '6px',
-            padding: '16px',
-            height: '260px',
-            overflowY: 'auto',
-            fontFamily: 'monospace',
-            fontSize: '0.82rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px'
-          }}
-        >
-          {filteredLogs.length === 0 ? (
-            <span style={{ color: 'var(--text-dim)' }}>Logs will stream here when campaign starts...</span>
-          ) : (
-            filteredLogs.map((log, i) => (
-              <div key={i} style={{ display: 'flex', gap: '10px' }}>
-                <span style={{ color: 'var(--text-dim)' }}>[{log.time}]</span>
-                <span style={{ color: log.type === 'error' ? 'var(--text-muted)' : '#ffffff' }}>
-                  {log.text}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Gauge size={16} color="#ffffff" />
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Delay:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={delaySeconds}
+                  onChange={e => setDelaySeconds(parseInt(e.target.value, 10) || 3)}
+                  className="input-enterprise"
+                  style={{ width: '60px', padding: '4px 8px', textAlign: 'center' }}
+                  disabled={campaignStatus === 'SENDING'}
+                />
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>sec</span>
               </div>
-            ))
-          )}
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={useRandomJitter}
+                  onChange={e => setUseRandomJitter(e.target.checked)}
+                  disabled={campaignStatus === 'SENDING'}
+                />
+                <Zap size={14} color="#ffffff" /> Random Jitter (+0-2s)
+              </label>
+            </div>
+
+          </div>
+
+          {/* Progress Bar */}
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              <span>Target Scope: {targetScope === 'INITIAL' ? 'Initial Email' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1' : 'Follow-Up #2'}</span>
+              <span>{progressPercent}% Complete ({currentIndex} / {eligibleTargets.length})</span>
+            </div>
+            <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${progressPercent}%`,
+                  height: '100%',
+                  background: '#ffffff',
+                  transition: 'width 0.3s ease'
+                }}
+              />
+            </div>
+          </div>
         </div>
+
+        {/* Live Terminal Terminal Logs */}
+        <div className="glass-enterprise-card" style={{ padding: '20px', background: '#080a0f', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Terminal size={18} color="#ffffff" />
+              <strong style={{ fontSize: '0.88rem', color: '#ffffff' }}>Live Dispatch Execution Terminal</strong>
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={() => setLogFilter('ALL')}
+                className="btn-enterprise"
+                style={{ padding: '3px 8px', fontSize: '0.72rem', background: logFilter === 'ALL' ? '#ffffff' : 'transparent', color: logFilter === 'ALL' ? '#080a0f' : 'var(--text-muted)' }}
+              >
+                All ({logs.length})
+              </button>
+              <button
+                onClick={() => setLogFilter('SUCCESS')}
+                className="btn-enterprise"
+                style={{ padding: '3px 8px', fontSize: '0.72rem', background: logFilter === 'SUCCESS' ? '#ffffff' : 'transparent', color: logFilter === 'SUCCESS' ? '#080a0f' : 'var(--text-muted)' }}
+              >
+                Success ({logs.filter(l => l.type === 'success').length})
+              </button>
+              <button
+                onClick={() => setLogFilter('ERROR')}
+                className="btn-enterprise"
+                style={{ padding: '3px 8px', fontSize: '0.72rem', background: logFilter === 'ERROR' ? '#ffffff' : 'transparent', color: logFilter === 'ERROR' ? '#080a0f' : 'var(--text-muted)' }}
+              >
+                Errors ({logs.filter(l => l.type === 'error').length})
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={logContainerRef}
+            style={{
+              fontFamily: 'monospace',
+              fontSize: '0.8rem',
+              height: '240px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              paddingRight: '8px'
+            }}
+          >
+            {filteredLogs.length === 0 ? (
+              <span style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>Terminal ready. Click "Start Campaign" above to dispatch emails.</span>
+            ) : (
+              filteredLogs.map((log, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: log.type === 'success' ? '#4ade80' : log.type === 'error' ? '#f87171' : log.type === 'warning' ? '#facc15' : '#e2e8f0',
+                    lineHeight: '1.5'
+                  }}
+                >
+                  <span style={{ color: 'var(--text-dim)', marginRight: '8px' }}>[{log.time}]</span>
+                  {log.text}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );

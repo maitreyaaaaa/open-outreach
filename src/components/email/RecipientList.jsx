@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, Building2, ShieldCheck, Check } from 'lucide-react';
+import { Upload, Plus, Trash2, Search, CheckCircle, Clock, AlertTriangle, Sparkles, Building2, ShieldCheck, Check, RotateCcw } from 'lucide-react';
 import { parseAnyFile, generateDemoCompanies } from '../../utils/csvParser';
 
 export default function RecipientList({ recipients, setRecipients, onNext, initialShowAddModal = false }) {
@@ -73,10 +73,14 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
 
     if (filterStatus === 'ALL') return matchesSearch;
     if (filterStatus === 'INVALID') return matchesSearch && !isValidEmailSyntax(r.Email);
+    if (filterStatus === 'SENT') return matchesSearch && (r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed');
+    if (filterStatus === 'FOLLOW_UP') return matchesSearch && (r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up #2 Sent');
     return matchesSearch && r.Status === filterStatus;
   });
 
-  const pendingCount = recipients.filter(r => r.Status === 'Pending').length;
+  const pendingCount = recipients.filter(r => r.Status === 'Pending' || !r.Status).length;
+  const sentCount = recipients.filter(r => r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed').length;
+  const followUpSentCount = recipients.filter(r => r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up #2 Sent').length;
 
   const sortedFilteredRecipients = [...filteredRecipients].sort((a, b) => {
     const aValid = isValidEmailSyntax(a.Email);
@@ -101,7 +105,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
               Email Outreach Directory
             </h2>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-              Manage recipients, run syntax validation, and prepare company emails for batch outreach.
+              Manage recipients, run syntax validation, and prepare company emails for initial & follow-up outreach.
             </p>
           </div>
 
@@ -134,7 +138,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
         )}
 
         {/* Stats Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
           <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Building2 size={20} color="#ffffff" />
@@ -147,11 +151,21 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
 
           <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShieldCheck size={20} color="#ffffff" />
+              <CheckCircle size={20} color="#ffffff" />
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Valid Email Syntax</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{recipients.length - invalidEmails.length}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Initial Sent</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{sentCount}</div>
+            </div>
+          </div>
+
+          <div className="glass-enterprise-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.1)', width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={20} color="#ffffff" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Follow-Ups Sent</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>{followUpSentCount}</div>
             </div>
           </div>
 
@@ -182,20 +196,27 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
         </div>
 
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {['ALL', 'Pending', 'Sent', 'Failed', 'INVALID'].map(status => (
+          {[
+            { id: 'ALL', label: 'All' },
+            { id: 'Pending', label: `Pending (${pendingCount})` },
+            { id: 'SENT', label: `Sent Initial (${sentCount})` },
+            { id: 'FOLLOW_UP', label: `Follow-Up Sent (${followUpSentCount})` },
+            { id: 'Failed', label: 'Failed' },
+            { id: 'INVALID', label: `Invalid Syntax (${invalidEmails.length})` }
+          ].map(btn => (
             <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
+              key={btn.id}
+              onClick={() => setFilterStatus(btn.id)}
               className="btn-enterprise"
               style={{
                 fontSize: '0.78rem',
                 padding: '5px 12px',
-                background: filterStatus === status ? '#ffffff' : 'rgba(255,255,255,0.06)',
-                color: filterStatus === status ? '#080a0f' : 'var(--text-muted)',
-                border: filterStatus === status ? 'none' : '1px solid rgba(255,255,255,0.1)'
+                background: filterStatus === btn.id ? '#ffffff' : 'rgba(255,255,255,0.06)',
+                color: filterStatus === btn.id ? '#080a0f' : 'var(--text-muted)',
+                border: filterStatus === btn.id ? 'none' : '1px solid rgba(255,255,255,0.1)'
               }}
             >
-              {status === 'INVALID' ? `Invalid Syntax (${invalidEmails.length})` : status}
+              {btn.label}
             </button>
           ))}
         </div>
@@ -211,7 +232,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
                 <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600' }}>Company Name</th>
                 <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600' }}>Target Email</th>
                 <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600' }}>Contact Person</th>
-                <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600' }}>Status</th>
+                <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600' }}>Sequence Status</th>
                 <th style={{ padding: '14px 18px', color: 'var(--text-muted)', fontWeight: '600', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -219,7 +240,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
               {sortedFilteredRecipients.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ padding: '50px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No companies match your search query. Click <strong>"Load Demo Companies"</strong> or upload a file.
+                    No companies match your filter query. Click <strong>"Load Demo Companies"</strong> or upload a file.
                   </td>
                 </tr>
               ) : (
@@ -236,10 +257,24 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
                       <td style={{ padding: '12px 18px', color: 'var(--text-muted)' }}>{item.ContactPerson}</td>
                       <td style={{ padding: '12px 18px' }}>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          {validSyntax && item.Status === 'Sent' && <span className="badge-enterprise badge-enterprise-white"><Check size={11} /> Sent</span>}
-                          {validSyntax && item.Status === 'Pending' && <span className="badge-enterprise"><Clock size={11} /> Pending</span>}
-                          {validSyntax && item.Status === 'Failed' && <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>}
-                          {!validSyntax && <span className="badge-enterprise" style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}>Invalid Email</span>}
+                          {validSyntax && (item.Status === 'Sent' || item.Status === 'Step 1 Sent' || item.Status === 'Completed') && (
+                            <span className="badge-enterprise badge-enterprise-white"><Check size={11} /> Step 1 Sent</span>
+                          )}
+                          {validSyntax && item.Status === 'Follow-Up #1 Sent' && (
+                            <span className="badge-enterprise" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}><RotateCcw size={11} /> Follow-Up #1 Sent</span>
+                          )}
+                          {validSyntax && item.Status === 'Follow-Up #2 Sent' && (
+                            <span className="badge-enterprise" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc' }}><RotateCcw size={11} /> Follow-Up #2 Sent</span>
+                          )}
+                          {validSyntax && (item.Status === 'Pending' || !item.Status) && (
+                            <span className="badge-enterprise"><Clock size={11} /> Pending</span>
+                          )}
+                          {validSyntax && item.Status === 'Failed' && (
+                            <span className="badge-enterprise"><AlertTriangle size={11} /> Failed</span>
+                          )}
+                          {!validSyntax && (
+                            <span className="badge-enterprise" style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}>Invalid Email</span>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '12px 18px', textAlign: 'right' }}>
@@ -261,7 +296,7 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
               Showing <strong>{filteredRecipients.length}</strong> of <strong>{recipients.length}</strong> recipients ready.
             </span>
             <button onClick={onNext} className="btn-enterprise btn-enterprise-primary">
-              Next: Customize Template &rarr;
+              Next: Customize Sequence Templates &rarr;
             </button>
           </div>
         )}
