@@ -124,9 +124,22 @@ export default function RecipientList({ recipients, setRecipients, onNext, initi
             </button>
 
             {recipients.length > 0 && (
-              <button onClick={handleClearAll} className="btn-enterprise btn-enterprise-danger">
-                <Trash2 size={15} /> Clear All
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    setRecipients(recipients.map(r => ({ ...r, Status: 'Step 1 Sent', SentAt: new Date().toLocaleTimeString() })));
+                  }}
+                  className="btn-enterprise btn-enterprise-secondary"
+                  style={{ fontSize: '0.78rem', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.4)' }}
+                  title="Mark all recipients as Step 1 Sent so they are ready for Follow-Up #1"
+                >
+                  <RotateCcw size={14} /> Mark All as Step 1 Sent (Ready for Follow-Up #1)
+                </button>
+
+                <button onClick={handleClearAll} className="btn-enterprise btn-enterprise-danger">
+                  <Trash2 size={15} /> Clear All
+                </button>
+              </>
             )}
           </div>
         </div>

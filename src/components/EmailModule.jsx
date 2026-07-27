@@ -19,7 +19,8 @@ export default function EmailModule({
   isSmtpConnected,
   setIsSmtpConnected
 }) {
-  const [subTab, setSubTab] = useState('recipients');
+  // Start with SMTP configuration first as step 1
+  const [subTab, setSubTab] = useState('smtp');
   const [showAddSingleModal, setShowAddSingleModal] = useState(false);
 
   useEffect(() => {
@@ -27,10 +28,10 @@ export default function EmailModule({
   }, [subTab]);
 
   const flowSteps = [
-    { id: 'recipients', label: '1. Directory' },
-    { id: 'template', label: '2. Template Composer' },
-    { id: 'preview', label: '3. 1-by-1 Preview' },
-    { id: 'smtp', label: '4. SMTP Security' },
+    { id: 'smtp', label: '1. SMTP Security Config' },
+    { id: 'recipients', label: '2. Directory & CSV Import' },
+    { id: 'template', label: '3. Sequence Composer' },
+    { id: 'preview', label: '4. 1-by-1 Preview' },
     { id: 'campaign', label: '5. Batch Dispatcher' }
   ];
 
@@ -60,67 +61,75 @@ export default function EmailModule({
         onStepClick={(stepId) => setSubTab(stepId)}
       />
 
-      {recipients.length === 0 && !showAddSingleModal && subTab === 'recipients' ? (
-        <EmptyState
-          title="No Email Recipients Loaded"
-          description="Your email target directory is currently empty. Load demo data, import a CSV/Excel file, or add a single entry manually."
-          channel="Email"
-          onLoadDemo={() => setRecipients(generateDemoCompanies())}
-          onImport={handleFileUpload}
-          onAddSingle={() => setShowAddSingleModal(true)}
+      {subTab === 'smtp' && (
+        <div>
+          <div style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '14px 20px', borderRadius: '8px', marginBottom: '20px', color: '#60a5fa', fontSize: '0.88rem' }}>
+            ⚡ <strong>Step 1: Connect your SMTP Account first.</strong> Once connected, you can import your CSV directory and dispatch initial or follow-up campaigns smoothly.
+          </div>
+          <SmtpSettings
+            smtpConfig={smtpConfig}
+            setSmtpConfig={setSmtpConfig}
+            isSmtpConnected={isSmtpConnected}
+            setIsSmtpConnected={setIsSmtpConnected}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+            <button onClick={() => setSubTab('recipients')} className="btn-enterprise btn-enterprise-primary">
+              Proceed to Directory & CSV Import &rarr;
+            </button>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'recipients' && (
+        recipients.length === 0 && !showAddSingleModal ? (
+          <EmptyState
+            title="No Email Recipients Loaded"
+            description="Your email target directory is currently empty. Load demo data, import a CSV/Excel file, or add a single entry manually."
+            channel="Email"
+            onLoadDemo={() => setRecipients(generateDemoCompanies())}
+            onImport={handleFileUpload}
+            onAddSingle={() => setShowAddSingleModal(true)}
+          />
+        ) : (
+          <RecipientList
+            recipients={recipients}
+            setRecipients={(newRecs) => {
+              setRecipients(newRecs);
+              if (newRecs.length === 0) setShowAddSingleModal(false);
+            }}
+            onNext={() => setSubTab('template')}
+            initialShowAddModal={showAddSingleModal}
+          />
+        )
+      )}
+
+      {subTab === 'template' && (
+        <TemplateEditor
+          template={template}
+          setTemplate={setTemplate}
+          availableVariables={availableVariables}
+          onNext={() => setSubTab('preview')}
         />
-      ) : (
-        <>
-          {subTab === 'recipients' && (
-            <RecipientList
-              recipients={recipients}
-              setRecipients={(newRecs) => {
-                setRecipients(newRecs);
-                if (newRecs.length === 0) setShowAddSingleModal(false);
-              }}
-              onNext={() => setSubTab('template')}
-              initialShowAddModal={showAddSingleModal}
-            />
-          )}
+      )}
 
-          {subTab === 'template' && (
-            <TemplateEditor
-              template={template}
-              setTemplate={setTemplate}
-              availableVariables={availableVariables}
-              onNext={() => setSubTab('preview')}
-            />
-          )}
+      {subTab === 'preview' && (
+        <EmailPreviewer
+          recipients={recipients}
+          template={template}
+          smtpConfig={smtpConfig}
+          isSmtpConnected={isSmtpConnected}
+          onNext={() => setSubTab('campaign')}
+        />
+      )}
 
-          {subTab === 'preview' && (
-            <EmailPreviewer
-              recipients={recipients}
-              template={template}
-              smtpConfig={smtpConfig}
-              isSmtpConnected={isSmtpConnected}
-              onNext={() => setSubTab('campaign')}
-            />
-          )}
-
-          {subTab === 'smtp' && (
-            <SmtpSettings
-              smtpConfig={smtpConfig}
-              setSmtpConfig={setSmtpConfig}
-              isSmtpConnected={isSmtpConnected}
-              setIsSmtpConnected={setIsSmtpConnected}
-            />
-          )}
-
-          {subTab === 'campaign' && (
-            <CampaignMonitor
-              recipients={recipients}
-              setRecipients={setRecipients}
-              template={template}
-              smtpConfig={smtpConfig}
-              isSmtpConnected={isSmtpConnected}
-            />
-          )}
-        </>
+      {subTab === 'campaign' && (
+        <CampaignMonitor
+          recipients={recipients}
+          setRecipients={setRecipients}
+          template={template}
+          smtpConfig={smtpConfig}
+          isSmtpConnected={isSmtpConnected}
+        />
       )}
 
     </div>
