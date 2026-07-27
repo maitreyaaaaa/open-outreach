@@ -3,11 +3,13 @@ import Navbar from './components/Navbar';
 import OverviewHub from './components/OverviewHub';
 import EmailModule from './components/EmailModule';
 import LinkedInModule from './components/LinkedInModule';
+import WhatsAppModule from './components/WhatsAppModule';
+import IntegrationHub from './components/IntegrationHub';
 import DiagnosticsModal from './components/ui/DiagnosticsModal';
 import { generateDemoCompanies, generateDemoLinkedInProfiles } from './utils/csvParser';
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin
+  const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin, whatsapp, integrations
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   // Email State
@@ -83,6 +85,17 @@ export default function App() {
             template={linkedinTemplate}
             setTemplate={setLinkedinTemplate}
           />
+        )}
+
+        {activeModule === 'whatsapp' && (
+          <WhatsAppModule
+            recipients={emailRecipients.length > 0 ? emailRecipients : generateDemoCompanies()}
+            setRecipients={setEmailRecipients}
+          />
+        )}
+
+        {activeModule === 'integrations' && (
+          <IntegrationHub />
         )}
       </main>
 

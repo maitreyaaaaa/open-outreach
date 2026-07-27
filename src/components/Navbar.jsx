@@ -1,11 +1,13 @@
 import React from 'react';
-import { LayoutDashboard, Mail, Linkedin, ShieldCheck, Terminal } from 'lucide-react';
+import { LayoutDashboard, Mail, Linkedin, MessageSquare, Layers, ShieldCheck, Terminal } from 'lucide-react';
 
 export default function Navbar({ activeModule, setActiveModule, emailCount, linkedinCount, isSmtpConnected, smtpUser, onOpenDiagnostics }) {
   const modules = [
     { id: 'overview', label: 'Overview Hub', icon: LayoutDashboard },
     { id: 'email', label: 'Email Outreach', icon: Mail, badge: emailCount },
-    { id: 'linkedin', label: 'LinkedIn Outreach', icon: Linkedin, badge: linkedinCount }
+    { id: 'linkedin', label: 'LinkedIn Outreach', icon: Linkedin, badge: linkedinCount },
+    { id: 'whatsapp', label: 'WhatsApp Outreach', icon: MessageSquare },
+    { id: 'integrations', label: 'Integration Hub', icon: Layers }
   ];
 
   return (
@@ -22,10 +24,10 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
               <h1 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.01em' }}>
                 Enterprise Outreach SaaS
               </h1>
-              <span className="badge-enterprise badge-enterprise-white">Direct REST SaaS</span>
+              <span className="badge-enterprise badge-enterprise-white">Composio Bridge Active</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Multi-Tenant Dual-Channel Engine (Email & Direct LinkedIn REST)
+              Multi-Channel Outreach Engine (Gmail, LinkedIn, WhatsApp & Composio)
             </p>
           </div>
         </div>
@@ -41,15 +43,15 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
                 onClick={() => setActiveModule(mod.id)}
                 className="btn-enterprise"
                 style={{
-                  padding: '7px 16px',
-                  fontSize: '0.84rem',
+                  padding: '7px 14px',
+                  fontSize: '0.82rem',
                   borderRadius: '6px',
                   background: isActive ? '#ffffff' : 'transparent',
                   color: isActive ? '#080a0f' : 'var(--text-muted)',
                   fontWeight: isActive ? '700' : '500'
                 }}
               >
-                <Icon size={15} color={isActive ? '#080a0f' : 'var(--text-muted)'} />
+                <Icon size={14} color={isActive ? '#080a0f' : 'var(--text-muted)'} />
                 <span>{mod.label}</span>
                 {mod.badge !== undefined && (
                   <span
