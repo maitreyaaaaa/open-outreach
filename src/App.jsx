@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import OverviewHub from './components/OverviewHub';
 import EmailModule from './components/EmailModule';
 import LinkedInModule from './components/LinkedInModule';
 import WhatsAppModule from './components/WhatsAppModule';
 import IntegrationHub from './components/IntegrationHub';
+import PluginSpace from './components/PluginSpace';
 import DiagnosticsModal from './components/ui/DiagnosticsModal';
-import { generateDemoCompanies, generateDemoLinkedInProfiles } from './utils/csvParser';
+import { generateDemoCompanies } from './utils/csvParser';
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin, whatsapp, integrations
+  const [activeModule, setActiveModule] = useState('overview'); // overview, email, linkedin, whatsapp, plugins, integrations
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   // Email State
@@ -42,21 +44,21 @@ export default function App() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#080a0f', color: '#ffffff' }}>
       
-      {/* Navigation Header */}
-      <Navbar
+      {/* Left Sidebar Navigation */}
+      <Sidebar
         activeModule={activeModule}
         setActiveModule={setActiveModule}
         emailCount={emailRecipients.length}
         linkedinCount={linkedinRecipients.length}
-        isSmtpConnected={isSmtpConnected}
-        smtpUser={smtpConfig.auth?.user}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
         onOpenDiagnostics={() => setShowDiagnostics(true)}
       />
 
-      {/* Main Views */}
-      <main style={{ flex: 1 }}>
+      {/* Right Spacious Main Canvas */}
+      <main style={{ flex: 1, overflowX: 'hidden', minWidth: 0, paddingBottom: '60px' }}>
         {activeModule === 'overview' && (
           <OverviewHub
             emailRecipients={emailRecipients}
@@ -92,6 +94,10 @@ export default function App() {
             recipients={emailRecipients.length > 0 ? emailRecipients : generateDemoCompanies()}
             setRecipients={setEmailRecipients}
           />
+        )}
+
+        {activeModule === 'plugins' && (
+          <PluginSpace />
         )}
 
         {activeModule === 'integrations' && (
