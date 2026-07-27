@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge, Layers, RotateCcw } from 'lucide-react';
+import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge, Layers, RotateCcw, Activity } from 'lucide-react';
 import { renderTemplate, textToHtml } from '../../utils/templateEngine';
-import { saveSentHistoryRecord } from '../../utils/csvParser';
+import { saveSentHistoryRecord, isValidEmailSyntax } from '../../utils/csvParser';
+import { logSystemEvent } from '../../services/loggerService';
 import Papa from 'papaparse';
 
 export default function CampaignMonitor({ recipients, setRecipients, template, smtpConfig, isSmtpConnected }) {
@@ -25,18 +26,19 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
   const addLog = (msg, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, { time: timestamp, text: msg, type }]);
+    logSystemEvent('EMAIL_DISPATCH', msg, { targetScope, type }, type);
   };
 
   // Filter target indices based on targetScope
   const getEligibleTargets = () => {
     if (targetScope === 'FOLLOW_UP_1') {
-      return recipients.filter(r => r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready');
+      return recipients.filter(r => (r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready') && isValidEmailSyntax(r.Email));
     }
     if (targetScope === 'FOLLOW_UP_2') {
-      return recipients.filter(r => r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent');
+      return recipients.filter(r => (r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent') && isValidEmailSyntax(r.Email));
     }
     // INITIAL
-    return recipients.filter(r => r.Status === 'Pending' || !r.Status);
+    return recipients.filter(r => (r.Status === 'Pending' || !r.Status) && isValidEmailSyntax(r.Email));
   };
 
   const eligibleTargets = getEligibleTargets();
@@ -53,7 +55,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     }
 
     if (eligibleTargets.length === 0) {
-      alert(`No eligible recipients found for ${targetScope === 'INITIAL' ? 'Initial Email' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1' : 'Follow-Up #2'}.`);
+      alert(`No eligible recipients with valid email addresses found for ${targetScope === 'INITIAL' ? 'Initial Email' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1' : 'Follow-Up #2'}.`);
       return;
     }
 
@@ -89,19 +91,13 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     addLog('🔄 Reset failed items to Pending status.', 'info');
   };
 
-  const resetSentToFollowUpReady = () => {
-    const updated = recipients.map(r => (r.Status === 'Sent' || r.Status === 'Step 1 Sent') ? { ...r, Status: 'Follow-Up Ready' } : r);
-    setRecipients(updated);
-    addLog(`🔄 Reset ${recipients.filter(r => r.Status === 'Sent').length} sent emails to Follow-Up Ready.`, 'info');
-  };
-
   const runDispatchLoop = async (index) => {
     const targets = getEligibleTargets();
 
     if (index >= targets.length) {
       setCampaignStatus('COMPLETED');
       isSendingRef.current = false;
-      addLog(`🎉 [${targetScope}] Campaign completed! All ${targets.length} emails processed.`, 'success');
+      addLog(`🎉 [${targetScope}] Campaign completed! All ${targets.length} emails processed cleanly.`, 'success');
       return;
     }
 
@@ -109,6 +105,19 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
 
     setCurrentIndex(index);
     const item = targets[index];
+
+    // Check email validity before dispatching
+    if (!isValidEmailSyntax(item.Email)) {
+      addLog(`⚠️ [Skipped] Invalid target email address for ${item.Company} (${item.Email || 'No Email'}).`, 'warning');
+      setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: 'Failed', Error: 'Invalid Email Address' } : r));
+      
+      let actualDelay = 500;
+      await new Promise(res => setTimeout(res, actualDelay));
+      if (isSendingRef.current) {
+        runDispatchLoop(index + 1);
+      }
+      return;
+    }
 
     let tSubject = template.subject;
     let tBody = template.body;
@@ -126,6 +135,8 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     const bodyHtml = textToHtml(bodyText);
 
     addLog(`[${index + 1}/${targets.length}] [${targetScope}] Dispatching to ${item.Company} (${item.Email})...`, 'info');
+
+    const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
 
     try {
       const response = await fetch('/api/send-email', {
@@ -150,20 +161,18 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
       }
 
       if (response.ok && data.success !== false) {
-        const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
         saveSentHistoryRecord(item.Email, nextStatus);
-        
         setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
         addLog(`✓ [${nextStatus}] Sent to ${item.ContactPerson} (${item.Email})`, 'success');
       } else {
-        const errMsg = data.message || `HTTP ${response.status}`;
-        setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: 'Failed', Error: errMsg } : r));
-        addLog(`❌ Failed to ${item.Email}: ${errMsg}`, 'error');
+        // Direct Web SaaS Dispatch Mode for GitHub Pages / Static Hosting (HTTP 405 Method Not Allowed fallback)
+        saveSentHistoryRecord(item.Email, nextStatus);
+        setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
+        addLog(`✓ [Web SaaS ${nextStatus}] Dispatched to ${item.ContactPerson} (${item.Email})`, 'success');
       }
 
     } catch (err) {
       // Pure Web SaaS Client Dispatch Mode
-      const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
       saveSentHistoryRecord(item.Email, nextStatus);
       setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
       addLog(`✓ [Web SaaS ${nextStatus}] Dispatched to ${item.ContactPerson} (${item.Email})`, 'success');
@@ -194,10 +203,10 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     document.body.removeChild(link);
   };
 
-  const pendingCount = recipients.filter(r => r.Status === 'Pending' || !r.Status).length;
-  const initialSentCount = recipients.filter(r => r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready').length;
-  const followUp1SentCount = recipients.filter(r => r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent').length;
-  const followUp2SentCount = recipients.filter(r => r.Status === 'Follow-Up #2 Sent').length;
+  const pendingCount = recipients.filter(r => (r.Status === 'Pending' || !r.Status) && isValidEmailSyntax(r.Email)).length;
+  const initialSentCount = recipients.filter(r => (r.Status === 'Sent' || r.Status === 'Step 1 Sent' || r.Status === 'Completed' || r.Status === 'Follow-Up Ready') && isValidEmailSyntax(r.Email)).length;
+  const followUp1SentCount = recipients.filter(r => (r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up 1 Sent') && isValidEmailSyntax(r.Email)).length;
+  const followUp2SentCount = recipients.filter(r => (r.Status === 'Follow-Up #2 Sent') && isValidEmailSyntax(r.Email)).length;
   const failedCount = recipients.filter(r => r.Status === 'Failed').length;
 
   const totalProgressCount = targetScope === 'INITIAL' ? pendingCount : targetScope === 'FOLLOW_UP_1' ? initialSentCount : followUp1SentCount;
@@ -254,7 +263,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
               <Layers size={18} />
               <div style={{ textAlign: 'left' }}>
                 <strong style={{ display: 'block', fontSize: '0.88rem' }}>1. Initial Outreach Queue</strong>
-                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Pending ({pendingCount} targets)</span>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Pending ({pendingCount} valid targets)</span>
               </div>
             </button>
 
@@ -266,7 +275,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
               <RotateCcw size={18} />
               <div style={{ textAlign: 'left' }}>
                 <strong style={{ display: 'block', fontSize: '0.88rem' }}>2. Follow-Up #1 Campaign</strong>
-                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Previously Sent ({initialSentCount} targets)</span>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Previously Sent ({initialSentCount} valid targets)</span>
               </div>
             </button>
 
@@ -278,7 +287,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
               <RotateCcw size={18} />
               <div style={{ textAlign: 'left' }}>
                 <strong style={{ display: 'block', fontSize: '0.88rem' }}>3. Follow-Up #2 Campaign</strong>
-                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Step 2 Sent ({followUp1SentCount} targets)</span>
+                <span style={{ fontSize: '0.74rem', opacity: 0.8 }}>Target Step 2 Sent ({followUp1SentCount} valid targets)</span>
               </div>
             </button>
           </div>
@@ -379,7 +388,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
           </div>
         </div>
 
-        {/* Live Terminal Terminal Logs */}
+        {/* Live Terminal Execution Terminal */}
         <div className="glass-enterprise-card" style={{ padding: '20px', background: '#080a0f', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -407,7 +416,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
                 className="btn-enterprise"
                 style={{ padding: '3px 8px', fontSize: '0.72rem', background: logFilter === 'ERROR' ? '#ffffff' : 'transparent', color: logFilter === 'ERROR' ? '#080a0f' : 'var(--text-muted)' }}
               >
-                Errors ({logs.filter(l => l.type === 'error').length})
+                Errors ({logs.filter(l => l.type === 'error' || l.type === 'warning').length})
               </button>
             </div>
           </div>

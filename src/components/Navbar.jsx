@@ -1,7 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Mail, Linkedin, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Mail, Linkedin, ShieldCheck, Terminal } from 'lucide-react';
 
-export default function Navbar({ activeModule, setActiveModule, emailCount, linkedinCount, isSmtpConnected, smtpUser }) {
+export default function Navbar({ activeModule, setActiveModule, emailCount, linkedinCount, isSmtpConnected, smtpUser, onOpenDiagnostics }) {
   const modules = [
     { id: 'overview', label: 'Overview Hub', icon: LayoutDashboard },
     { id: 'email', label: 'Email Outreach', icon: Mail, badge: emailCount },
@@ -70,8 +70,16 @@ export default function Navbar({ activeModule, setActiveModule, emailCount, link
           })}
         </nav>
 
-        {/* Zero-Persistence Security Badge */}
+        {/* Action Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={onOpenDiagnostics}
+            className="btn-enterprise btn-enterprise-secondary"
+            style={{ fontSize: '0.78rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Terminal size={14} /> System Audit Logs
+          </button>
+          
           <span className="badge-enterprise badge-enterprise-white" style={{ padding: '6px 12px', fontSize: '0.78rem' }}>
             <ShieldCheck size={14} color="#080a0f" /> Zero-Persistence Security
           </span>

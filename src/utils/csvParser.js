@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { logSystemEvent } from '../services/loggerService';
 
 /**
  * Helper to retrieve stored dispatch history map from browser localStorage
@@ -27,6 +28,14 @@ export function saveSentHistoryRecord(targetKey, status = 'Step 1 Sent') {
     };
     localStorage.setItem('open_outreach_sent_history', JSON.stringify(current));
   } catch (e) {}
+}
+
+export function isValidEmailSyntax(email) {
+  if (!email || typeof email !== 'string') return false;
+  const clean = email.trim().toLowerCase();
+  if (clean.length < 5 || clean.length > 80) return false;
+  if (clean.includes('no verified') || clean.includes('not found') || clean.includes('none') || clean.includes('n/a') || clean.includes('no email')) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
 }
 
 export function generateDemoCompanies() {
@@ -224,7 +233,12 @@ export async function parseAnyFile(file) {
 
   const sorted = sortProfilesValidFirst(rawRows);
   const sentCount = sorted.filter(r => r.Status === 'Step 1 Sent' || r.Status === 'Sent' || r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up #2 Sent').length;
-  console.log(`[Parser Debug] Parsed ${file.name}: ${sorted.length} total rows (${sentCount} recognized as previously sent).`);
+  
+  logSystemEvent('CSV_PARSER', 'PARSED_FILE', {
+    fileName: file.name,
+    totalRows: sorted.length,
+    sentRecognizedCount: sentCount
+  }, 'info');
 
   return sorted;
 }
@@ -277,6 +291,11 @@ function normalizeRowData(row, index) {
   if (!email) {
     const emailVal = keys.map(k => sanitizeText(row[k])).find(v => v.includes('@') && v.includes('.'));
     email = emailVal || '';
+  }
+
+  // Strict email syntax check
+  if (!isValidEmailSyntax(email)) {
+    email = '';
   }
 
   const name = deriveCleanName(rawName, email);
