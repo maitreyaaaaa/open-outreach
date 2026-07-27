@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Server, CheckCircle2, AlertCircle, Zap, Eye, EyeOff, Info, Lock, ShieldAlert, X } from 'lucide-react';
+import { Server, CheckCircle2, AlertCircle, Zap, Eye, EyeOff, Info, Lock, ShieldAlert, X, Globe, Key } from 'lucide-react';
+import { getStoredGoogleClientId, saveGoogleClientId } from '../../services/gmailOAuthService';
 
 export default function SmtpSettings({ smtpConfig, setSmtpConfig, isSmtpConnected, setIsSmtpConnected }) {
   const [testing, setTesting] = useState(false);
@@ -7,6 +8,9 @@ export default function SmtpSettings({ smtpConfig, setSmtpConfig, isSmtpConnecte
   const [showPassword, setShowPassword] = useState(false);
   const [showSecurityNotice, setShowSecurityNotice] = useState(false);
   const [hasWarnedThisSession, setHasWarnedThisSession] = useState(false);
+
+  const [googleClientId, setGoogleClientId] = useState(getStoredGoogleClientId());
+  const [oAuthStatus, setOAuthStatus] = useState(null);
 
   const applyPreset = (preset) => {
     if (preset === 'gmail') {
@@ -54,6 +58,14 @@ export default function SmtpSettings({ smtpConfig, setSmtpConfig, isSmtpConnecte
     }
   };
 
+  const handleSaveGoogleClientId = (e) => {
+    e.preventDefault();
+    if (!googleClientId) return;
+    saveGoogleClientId(googleClientId);
+    setIsSmtpConnected(true);
+    setOAuthStatus({ success: true, message: 'Google OAuth Client ID saved! 1-Click Google Sign-In active.' });
+  };
+
   const handleTestConnection = async (e) => {
     e.preventDefault();
     setTesting(true);
@@ -92,6 +104,43 @@ export default function SmtpSettings({ smtpConfig, setSmtpConfig, isSmtpConnecte
   return (
     <div>
       
+      {/* 1. Google OAuth 2.0 Direct Browser Client Card */}
+      <div className="glass-enterprise-panel" style={{ padding: '28px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <Globe size={24} color="#ffffff" />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge-enterprise badge-enterprise-white">Google OAuth 2.0</span>
+              <span className="badge-enterprise">Recommended</span>
+            </div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', marginTop: '4px', color: '#ffffff' }}>1-Click Gmail OAuth 2.0 Connection</h2>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>Authenticate directly with Google OAuth 2.0 without entering plain-text app passwords.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveGoogleClientId} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            className="input-enterprise"
+            style={{ flex: 1, minWidth: '280px', fontFamily: 'monospace' }}
+            placeholder="Enter Google OAuth Client ID (e.g. 12345-abc.apps.googleusercontent.com)"
+            value={googleClientId}
+            onChange={e => setGoogleClientId(e.target.value)}
+          />
+          <button type="submit" className="btn-enterprise btn-enterprise-primary">
+            Save Google OAuth ID
+          </button>
+        </form>
+
+        {oAuthStatus && (
+          <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '6px', fontSize: '0.84rem', background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle2 size={16} color="#4ade80" />
+            {oAuthStatus.message}
+          </div>
+        )}
+      </div>
+
+      {/* 2. Standard SMTP Transporter Configuration */}
       <div className="glass-enterprise-panel" style={{ padding: '28px' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
@@ -101,7 +150,7 @@ export default function SmtpSettings({ smtpConfig, setSmtpConfig, isSmtpConnecte
               <span className="badge-enterprise badge-enterprise-white">Ephemeral Memory Only</span>
               <span className="badge-enterprise">Zero Disk Storage</span>
             </div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: '700', marginTop: '4px', color: '#ffffff' }}>SMTP Credentials & Security</h2>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: '700', marginTop: '4px', color: '#ffffff' }}>SMTP Credentials & Transporter</h2>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>App Passwords are never saved on disk. You must enter them per session.</p>
           </div>
         </div>
