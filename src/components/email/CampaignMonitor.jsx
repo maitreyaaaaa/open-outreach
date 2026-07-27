@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, RefreshCw, Download, Terminal, Zap, Gauge, Layers, RotateCcw } from 'lucide-react';
 import { renderTemplate, textToHtml } from '../../utils/templateEngine';
+import { saveSentHistoryRecord } from '../../utils/csvParser';
 import Papa from 'papaparse';
 
 export default function CampaignMonitor({ recipients, setRecipients, template, smtpConfig, isSmtpConnected }) {
@@ -150,6 +151,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
 
       if (response.ok && data.success !== false) {
         const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
+        saveSentHistoryRecord(item.Email, nextStatus);
         
         setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
         addLog(`✓ [${nextStatus}] Sent to ${item.ContactPerson} (${item.Email})`, 'success');
@@ -162,6 +164,7 @@ export default function CampaignMonitor({ recipients, setRecipients, template, s
     } catch (err) {
       // Pure Web SaaS Client Dispatch Mode
       const nextStatus = targetScope === 'INITIAL' ? 'Step 1 Sent' : targetScope === 'FOLLOW_UP_1' ? 'Follow-Up #1 Sent' : 'Follow-Up #2 Sent';
+      saveSentHistoryRecord(item.Email, nextStatus);
       setRecipients(prev => prev.map(r => r.id === item.id ? { ...r, Status: nextStatus, SentAt: new Date().toLocaleTimeString(), Error: null } : r));
       addLog(`✓ [Web SaaS ${nextStatus}] Dispatched to ${item.ContactPerson} (${item.Email})`, 'success');
     }

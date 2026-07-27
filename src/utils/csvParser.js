@@ -1,6 +1,34 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
+/**
+ * Helper to retrieve stored dispatch history map from browser localStorage
+ */
+export function getSentHistoryMap() {
+  try {
+    const raw = localStorage.getItem('open_outreach_sent_history');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Saves a sent record to browser localStorage for automatic CSV recognition across sessions
+ */
+export function saveSentHistoryRecord(targetKey, status = 'Step 1 Sent') {
+  if (!targetKey) return;
+  try {
+    const cleanKey = String(targetKey).trim().toLowerCase();
+    const current = getSentHistoryMap();
+    current[cleanKey] = {
+      status,
+      sentAt: new Date().toISOString()
+    };
+    localStorage.setItem('open_outreach_sent_history', JSON.stringify(current));
+  } catch (e) {}
+}
+
 export function generateDemoCompanies() {
   const companies = [
     { name: 'Y Combinator', email: 'press@ycombinator.com', contact: 'Garry Tan' },
@@ -30,16 +58,23 @@ export function generateDemoCompanies() {
     { name: 'GV (Google Ventures)', email: 'press@gv.com', contact: 'Frédérique Dame' }
   ];
 
-  return companies.map((c, i) => ({
-    id: i + 1,
-    Company: c.name,
-    Email: c.email,
-    ContactPerson: c.contact,
-    CustomNote: `We saw ${c.name}'s recent announcement and wanted to reach out.`,
-    Status: 'Pending',
-    SentAt: null,
-    Error: null
-  }));
+  const historyMap = getSentHistoryMap();
+
+  return companies.map((c, i) => {
+    const cleanEmail = c.email.toLowerCase();
+    const isSent = historyMap[cleanEmail];
+
+    return {
+      id: i + 1,
+      Company: c.name,
+      Email: c.email,
+      ContactPerson: c.contact,
+      CustomNote: `We saw ${c.name}'s recent announcement and wanted to reach out.`,
+      Status: isSent ? (isSent.status || 'Step 1 Sent') : 'Pending',
+      SentAt: isSent ? isSent.sentAt : null,
+      Error: null
+    };
+  });
 }
 
 export function generateDemoLinkedInProfiles() {
@@ -49,6 +84,7 @@ export function generateDemoLinkedInProfiles() {
   const lastNames = ['Chen', 'Smith', 'Johnson', 'Miller', 'Davis', 'Wilson', 'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris'];
 
   const demoData = [];
+  const historyMap = getSentHistoryMap();
 
   for (let i = 1; i <= 25; i++) {
     const fn = firstNames[(i - 1) % firstNames.length];
@@ -56,16 +92,19 @@ export function generateDemoLinkedInProfiles() {
     const company = companies[(i - 1) % companies.length];
     const role = roles[(i - 1) % roles.length];
     const handle = `${fn.toLowerCase()}-${ln.toLowerCase()}-${i}`;
-    
+    const url = `https://www.linkedin.com/in/${handle}`;
+    const cleanUrl = url.toLowerCase();
+    const isSent = historyMap[cleanUrl];
+
     demoData.push({
       id: i,
       Name: `${fn} ${ln}`,
       Company: company,
       Role: role,
-      LinkedInUrl: `https://www.linkedin.com/in/${handle}`,
+      LinkedInUrl: url,
       CustomNote: `Hi ${fn}, noticed your work at ${company} as ${role}. Would love to connect and share updates on our venture!`,
-      Status: 'Pending',
-      SentAt: null,
+      Status: isSent ? (isSent.status || 'Step 1 Sent') : 'Pending',
+      SentAt: isSent ? isSent.sentAt : null,
       Error: null
     });
   }
@@ -105,14 +144,12 @@ function isBinaryFile(file) {
 
 /**
  * Robust LinkedIn URL Validator
- * Accepts all subdomains (in.linkedin.com, uk.linkedin.com), handles, query tracking params, and sales nav links.
  */
 export function isValidLinkedInUrl(url) {
   if (!url || typeof url !== 'string') return false;
   const cleaned = url.trim().toLowerCase();
   if (cleaned.length < 10) return false;
 
-  // Must contain linkedin.com OR be a valid HTTP(S) URL
   const isLinkedIn = cleaned.includes('linkedin.com') || cleaned.includes('linkedin.com/in/') || cleaned.includes('linkedin.com/sales/');
   const isHttpUrl = /^https?:\/\/[^\s/$.?#].[^\s]*$/i.test(cleaned);
 
@@ -120,19 +157,17 @@ export function isValidLinkedInUrl(url) {
 }
 
 /**
- * Normalizes LinkedIn URL by cleaning tracking parameters and adding protocol
+ * Normalizes LinkedIn URL
  */
 export function normalizeLinkedInUrl(url) {
   if (!url || typeof url !== 'string') return '';
   let u = url.trim();
   if (!u) return '';
 
-  // Clean trailing query parameters (e.g. ?miniProfileUrn=...)
   if (u.includes('?')) {
     u = u.split('?')[0];
   }
 
-  // Prepend protocol if missing
   if (!u.startsWith('http://') && !u.startsWith('https://')) {
     u = `https://${u.replace(/^\/\//, '')}`;
   }
@@ -184,8 +219,8 @@ export async function parseAnyFile(file) {
   }
 
   const sorted = sortProfilesValidFirst(rawRows);
-  const validCount = sorted.filter(r => isValidLinkedInUrl(r.LinkedInUrl)).length;
-  console.log(`[Parser Debug] Parsed ${file.name}: ${sorted.length} total rows (${validCount} valid LinkedIn URLs, ${sorted.length - validCount} invalid).`);
+  const sentCount = sorted.filter(r => r.Status === 'Step 1 Sent' || r.Status === 'Sent' || r.Status === 'Follow-Up #1 Sent' || r.Status === 'Follow-Up #2 Sent').length;
+  console.log(`[Parser Debug] Parsed ${file.name}: ${sorted.length} total rows (${sentCount} recognized as previously sent).`);
 
   return sorted;
 }
@@ -198,7 +233,6 @@ function normalizeRowData(row, index) {
 
   const fullRowStr = JSON.stringify(row).toLowerCase();
 
-  // Ignore internal Excel ZIP metadata paths
   if (
     fullRowStr.includes('xl/theme') ||
     fullRowStr.includes('sharedstrings.xml') ||
@@ -211,12 +245,6 @@ function normalizeRowData(row, index) {
 
   const keys = Object.keys(row);
   if (keys.length === 0) return null;
-
-  // Check if row is a formula garbage token (e.g. 4Gf3,Q*)
-  const allValuesStr = keys.map(k => String(row[k] || '')).join(' ');
-  if (/^[a-z0-9,\*<>\^\$!≡\\\|\?\s]{1,12}$/i.test(allValuesStr.trim()) && !allValuesStr.includes('http')) {
-    return null; // Ignore formula garbage row
-  }
 
   const findKey = (patterns) => {
     return keys.find(k => {
@@ -244,11 +272,11 @@ function normalizeRowData(row, index) {
 
   const name = sanitizeText(rawName) || `Contact #${index + 1}`;
 
-  // 2. Role / Title / Position Detection
+  // 2. Role Detection
   const roleKey = findKey(['role', 'title', 'jobtitle', 'position', 'headline', 'occupation', 'designation', 'investortype', 'type', 'category']);
   let role = roleKey && row[roleKey] ? sanitizeText(row[roleKey]) : 'Executive / Investor';
 
-  // 3. Company / Firm / Organization Detection
+  // 3. Company Detection
   const companyKey = findKey(['company', 'firm', 'fund', 'organization', 'org', 'employer', 'workplace', 'account', 'venture', 'business']);
   let company = companyKey && row[companyKey] ? sanitizeText(row[companyKey]) : '';
   
@@ -261,14 +289,13 @@ function normalizeRowData(row, index) {
   }
   if (!company) company = 'Investment Firm';
 
-  // 4. LinkedIn URL Detection — Intelligent Multi-Strategy Matcher
+  // 4. LinkedIn URL Detection
   const linkedinKey = findKey(['linkedin', 'profileurl', 'profilelink', 'personlinkedinurl', 'linkedinurl', 'url', 'link', 'social']);
   let rawUrl = '';
   if (linkedinKey && row[linkedinKey]) {
     rawUrl = sanitizeText(row[linkedinKey]);
   }
   
-  // If key search didn't yield a valid URL, search ALL cell values in row for any URL containing linkedin.com or http
   if (!isValidLinkedInUrl(rawUrl)) {
     const urlFromCells = keys
       .map(k => sanitizeText(row[k]))
@@ -293,6 +320,38 @@ function normalizeRowData(row, index) {
   const noteKey = findKey(['customnote', 'note', 'message', 'intro']);
   const customNote = noteKey && row[noteKey] ? sanitizeText(row[noteKey]) : '';
 
+  // 7. Status & Sent History Recognition
+  const statusKey = findKey(['status', 'state', 'sent', 'sentat', 'stage', 'outreachstatus', 'lastcontacted', 'dispatched', 'completed']);
+  let statusVal = statusKey && row[statusKey] ? sanitizeText(row[statusKey]) : '';
+  
+  const historyMap = getSentHistoryMap();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanUrl = (linkedinUrl || '').trim().toLowerCase();
+
+  let initialStatus = 'Pending';
+  let initialSentAt = null;
+
+  // A. Check CSV column value
+  if (statusVal) {
+    const sLower = statusVal.toLowerCase();
+    if (sLower.includes('follow-up #2') || sLower.includes('followup 2')) {
+      initialStatus = 'Follow-Up #2 Sent';
+    } else if (sLower.includes('follow-up #1') || sLower.includes('followup 1') || sLower.includes('followup')) {
+      initialStatus = 'Follow-Up #1 Sent';
+    } else if (sLower.includes('sent') || sLower.includes('true') || sLower.includes('yes') || sLower.includes('1') || sLower.includes('completed') || sLower.includes('dispatched')) {
+      initialStatus = 'Step 1 Sent';
+    }
+  }
+
+  // B. Check localStorage sent history match
+  if (cleanEmail && historyMap[cleanEmail]) {
+    initialStatus = historyMap[cleanEmail].status || 'Step 1 Sent';
+    initialSentAt = historyMap[cleanEmail].sentAt || null;
+  } else if (cleanUrl && historyMap[cleanUrl]) {
+    initialStatus = historyMap[cleanUrl].status || 'Step 1 Sent';
+    initialSentAt = historyMap[cleanUrl].sentAt || null;
+  }
+
   return {
     id: index + 1,
     Name: name,
@@ -302,8 +361,8 @@ function normalizeRowData(row, index) {
     LinkedInUrl: linkedinUrl,
     ContactPerson: name,
     CustomNote: customNote,
-    Status: 'Pending',
-    SentAt: null,
+    Status: initialStatus,
+    SentAt: initialSentAt,
     Error: null
   };
 }
@@ -379,10 +438,10 @@ export function parseExcelFile(file) {
           reject(new Error('No data found in Excel sheet.'));
         }
       } catch (err) {
-        reject(new Error(`Excel parsing error: ${err.message}`));
+        reject(err);
       }
     };
-    reader.onerror = (error) => reject(error);
+    reader.onerror = (err) => reject(err);
     reader.readAsArrayBuffer(file);
   });
 }
